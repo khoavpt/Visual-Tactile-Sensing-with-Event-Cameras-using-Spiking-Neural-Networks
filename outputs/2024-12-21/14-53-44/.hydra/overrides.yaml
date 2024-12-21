@@ -1,0 +1,3 @@
+- model=convsnn_cf
+- model.spikegrad=fast_sigmoid
+- trainer.max_epochs=10

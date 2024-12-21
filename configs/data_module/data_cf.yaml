@@ -1,0 +1,7 @@
+batch_size: 32
+num_workers: 1
+frame_duration: 10
+encoding_type: accumulate
+sequence_length: 300
+input_dir: "data/raw_data"
+output_dir: "data/seq_data"

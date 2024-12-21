@@ -1,0 +1,4 @@
+defaults:
+- data_module: data_cf
+- model: convlstm_cf
+- trainer: trainer_cf

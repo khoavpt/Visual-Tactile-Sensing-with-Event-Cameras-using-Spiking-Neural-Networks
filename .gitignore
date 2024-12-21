@@ -1,0 +1,6 @@
+.vscode/
+**__pycache__/
+**.ruff_cache/
+
+data/raw_data/*
+data/seq_data/*

@@ -1,0 +1,2 @@
+_target_: src.models.convlstm.ConvLSTM
+feature_size: 256

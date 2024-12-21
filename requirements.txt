@@ -1,0 +1,93 @@
+class CustomSequenceDataset(Dataset):
+    def __init__(self, root_dir):
+        self.root_dir = root_dir
+        self.classes, self.class_to_idx = self._find_classes(self.root_dir)
+        self.samples = self._make_dataset(self.root_dir, self.class_to_idx)
+        
+    def _find_classes(self, dir):
+        classes = [d.name for d in os.scandir(dir) if d.is_dir()]
+        classes.sort()
+        class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
+        return classes, class_to_idx
+
+    def _make_dataset(self, dir, class_to_idx):
+        instances = []
+        for target_class in sorted(class_to_idx.keys()):
+            class_index = class_to_idx[target_class]
+            target_dir = os.path.join(dir, target_class)
+            if not os.path.isdir(target_dir):
+                continue
+            for root, _, fnames in sorted(os.walk(target_dir)):
+                for fname in sorted(fnames):
+                    path = os.path.join(root, fname)
+                    item = (path, class_index)
+                    instances.append(item)
+        return instances
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        """
+        Returns:
+            sequence (torch.Tensor): A sequence of frames of shape (sequence_length, channels, height, width)
+            target (int): Target class index
+        """
+        path, target = self.samples[idx]
+        sequence = torch.load(path)
+        return sequence, target
+
+def create_dataloader(
+        data_dir: str,
+        batch_size: int,
+        num_workers: int = 1
+):
+    # Create the dataset
+    dataset = CustomSequenceDataset(root_dir=data_dir)
+   
+    # Define the split ratio
+    train_ratio = 0.8
+    test_ratio = 0.2
+
+    # Calculate the lengths for training and testing
+    dataset_size = len(dataset)
+    train_size = int(dataset_size * train_ratio)
+    test_size = dataset_size - train_size
+
+    # Split the dataset
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+
+    # Create DataLoaders for the training and test sets
+    train_dataloader = DataLoader(dataset=train_dataset,
+                                  batch_size=batch_size,
+                                  shuffle=True,
+                                  )
+    test_dataloader = DataLoader(dataset=test_dataset,
+                                 batch_size=batch_size,
+                                 shuffle=False,
+                                 )
+
+    # Check the dataset
+    print(f"Number of classes: {len(dataset.classes)}")
+    print(f"Class to index mapping: {dataset.class_to_idx}")
+
+    # Check sizes of the splits
+    print(f"Total number of sequences: {dataset_size}")
+    print(f"Number of training sequences: {len(train_dataset)}")
+    print(f"Number of test sequences: {len(test_dataset)}")
+
+    # Iterate over the training DataLoader
+    print("Training DataLoader:")
+    for images, labels in train_dataloader:
+        print(images.shape, labels.shape)
+        break
+
+    # Iterate over the test DataLoader
+    print("Test DataLoader:")
+    for images, labels in test_dataloader:
+        print(images.shape, labels.shape)
+        break
+
+    print(f"Number of training batches: {len(train_dataloader)}")
+    print(f"Number of test batches: {len(test_dataloader)}")
+    return train_dataloader, test_dataloader, dataset.classes
