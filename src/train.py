@@ -1,5 +1,4 @@
 # filepath: /c:/Users/LENOVO/OneDrive/uet/lab/spike-neural-networks/Spiking-neural-networks-for-event-cameras/tactile_experiment/src/train.py
-import torch
 import rootutils
 import pytorch_lightning as pl
 import hydra
