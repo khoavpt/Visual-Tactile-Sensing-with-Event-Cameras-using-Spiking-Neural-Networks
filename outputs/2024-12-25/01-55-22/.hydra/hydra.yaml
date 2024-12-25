@@ -112,13 +112,13 @@ hydra:
     hydra:
     - hydra.mode=RUN
     task:
-    - model=convsnn_cf
-    - model.spikegrad=fast_sigmoid
-    - trainer.max_epochs=10
+    - data_module.input_dir=data/raw_data
+    - data_module.output_dir=data/seq_data
+    - data_module.encoding_type=accumulate
   job:
-    name: train
+    name: process_train_data
     chdir: null
-    override_dirname: model.spikegrad=fast_sigmoid,model=convsnn_cf,trainer.max_epochs=10
+    override_dirname: data_module.encoding_type=accumulate,data_module.input_dir=data/raw_data,data_module.output_dir=data/seq_data
     id: ???
     num: ???
     config_name: config
@@ -132,12 +132,12 @@ hydra:
   runtime:
     version: 1.3.2
     version_base: '1.1'
-    cwd: C:\Users\LENOVO\OneDrive\uet\lab\spike-neural-networks\Spiking-neural-networks-for-event-cameras\tactile_experiment
+    cwd: C:\Users\LENOVO\OneDrive\uet\lab\Visual-Tactile-Sensing-with-Event-Cameras-using-Spiking-Neural-Networks
     config_sources:
     - path: hydra.conf
       schema: pkg
       provider: hydra
-    - path: C:\Users\LENOVO\OneDrive\uet\lab\spike-neural-networks\Spiking-neural-networks-for-event-cameras\tactile_experiment\configs
+    - path: C:\Users\LENOVO\OneDrive\uet\lab\Visual-Tactile-Sensing-with-Event-Cameras-using-Spiking-Neural-Networks\configs
       schema: file
       provider: main
     - path: hydra_plugins.hydra_colorlog.conf
@@ -146,10 +146,10 @@ hydra:
     - path: ''
       schema: structured
       provider: schema
-    output_dir: C:\Users\LENOVO\OneDrive\uet\lab\spike-neural-networks\Spiking-neural-networks-for-event-cameras\tactile_experiment\outputs\2024-12-21\14-53-44
+    output_dir: C:\Users\LENOVO\OneDrive\uet\lab\Visual-Tactile-Sensing-with-Event-Cameras-using-Spiking-Neural-Networks\outputs\2024-12-25\01-55-22
     choices:
       trainer: trainer_cf
-      model: convsnn_cf
+      model: convlstm_cf
       data_module: data_cf
       hydra/env: default
       hydra/callbacks: null

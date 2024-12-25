@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+from torch import optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class CNN(nn.Module):
     def __init__(self, in_channels, output_size):
@@ -90,5 +92,14 @@ class ConvLSTM(pl.LightningModule):
         self.log('val_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.003)
-        return optimizer
+        optimizer = optim.Adam(self.parameters(), lr=0.001)
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': scheduler,
+                'monitor': 'val_loss',
+                'interval': 'epoch',
+                'frequency': 1
+            }
+        }

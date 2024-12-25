@@ -1,11 +1,13 @@
 import os
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
+from torchvision import transforms
 
 class CustomSequenceDataset(Dataset):
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, transform=None):
         self.root_dir = root_dir
         self.samples = self._make_dataset(self.root_dir)
+        self.transform = transform
         
     def _make_dataset(self, dir):
         paths = []
@@ -25,17 +27,26 @@ class CustomSequenceDataset(Dataset):
         """
         path = self.samples[idx]
         sequence_data = torch.load(path)
-        return sequence_data['sequence'], sequence_data['label']
+        sequence, label = sequence_data['sequence'], sequence_data['label']
+        
+        if self.transform:
+            sequence = torch.stack([self.transform(frame) for frame in sequence])
+        
+        return sequence, label
     
 def create_dataloader(
         data_dir: str,
         batch_size: int,
         num_workers: int = 1
 ):
-    # Create the dataset
+    train_transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+    ])
+    
     dataset = CustomSequenceDataset(root_dir=data_dir)
    
-    # Define the split ratio
+    # Split ratio
     train_ratio = 0.8
     test_ratio = 0.2
 
@@ -44,31 +55,28 @@ def create_dataloader(
     train_size = int(dataset_size * train_ratio)
     test_size = dataset_size - train_size
 
-    # Split the dataset
     train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
 
-    # Create DataLoaders for the training and test sets
+    train_dataset.dataset.transform = train_transform
+
     train_dataloader = DataLoader(dataset=train_dataset,
                                   batch_size=batch_size,
                                   shuffle=True,
-                                  )
+                                  num_workers=num_workers)
     test_dataloader = DataLoader(dataset=test_dataset,
                                  batch_size=batch_size,
                                  shuffle=False,
-                                 )
+                                 num_workers=num_workers)
 
-    # Check sizes of the splits
     print(f"Total number of sequences: {dataset_size}")
     print(f"Number of training sequences: {len(train_dataset)}")
     print(f"Number of test sequences: {len(test_dataset)}")
 
-    # Iterate over the training DataLoader
     print("Training DataLoader:")
     for images, labels in train_dataloader:
         print(images.shape, labels.shape)
         break
 
-    # Iterate over the test DataLoader
     print("Test DataLoader:")
     for images, labels in test_dataloader:
         print(images.shape, labels.shape)

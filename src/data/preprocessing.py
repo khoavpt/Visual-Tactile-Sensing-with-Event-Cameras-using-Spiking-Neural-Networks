@@ -49,7 +49,7 @@ def dv_data_frame_tSlice(file_path, press_times_list, duration=10, encoding_type
             event_end_time = events.getHighestTime()
             label = 0
             for start, end in zip(press_times_list[::2], press_times_list[1::2]):
-                if event_start_time <= end and event_end_time >= start:
+                if event_start_time <= end and event_end_time >= start: # A frame is considered as a press if it contains any press event
                     label = 1
                     break
             labels.append(label)
@@ -63,13 +63,19 @@ def dv_data_frame_tSlice(file_path, press_times_list, duration=10, encoding_type
     return frames, labels
 
 def preprocess_frames(frames, target_size=(32, 32)):
+    class ClipTransform:
+        def __call__(self, img):
+            return torch.clamp(img, 0, 1)
+
     transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.Resize(target_size),  # Resize the images if needed
         transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),         # Convert images to tensor
-        transforms.Normalize(mean=[0.485], std=[0.229])  # Normalize
+        ClipTransform(),               # Clip values to be inside [0, 1]
+        transforms.Normalize(mean=[0.5], std=[0.25])  # Normalize
     ])
+    
     preprocessed_frames = [transform(frame) for frame in frames]
     return preprocessed_frames
 

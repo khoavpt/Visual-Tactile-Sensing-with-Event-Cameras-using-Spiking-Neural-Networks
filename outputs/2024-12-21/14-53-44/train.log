@@ -1,3 +1,0 @@
-[2024-12-21 14:55:16,467][__main__][INFO] - Data config: {'batch_size': 32, 'num_workers': 1, 'frame_duration': 10, 'encoding_type': 'accumulate', 'sequence_length': 300, 'input_dir': 'data/raw_data', 'output_dir': 'data/seq_data'}
-[2024-12-21 14:55:16,469][__main__][INFO] - Model config: {'_target_': 'src.models.convsnn.ConvSNN', 'beta_init': 0.9, 'spikegrad': 'fast_sigmoid', 'in_channels': 1}
-[2024-12-21 14:55:16,470][__main__][INFO] - Trainer config: {'_target_': 'pytorch_lightning.Trainer', 'max_epochs': 10, 'accelerator': 'cpu'}

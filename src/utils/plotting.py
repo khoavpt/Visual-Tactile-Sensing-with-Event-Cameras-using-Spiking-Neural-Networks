@@ -23,7 +23,7 @@ def plot_results(train_losses, val_losses, train_accs, val_accs, model_name, sav
     else:
         plt.show()
 
-def visualize_top_errors(model, test_dataloader, model_name, top_n=5, save_path='top_errors.mp4'):
+def visualize_top_errors(model, test_dataloader, model_name, top_n=5, save_path='top_errors.mp4'):    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     model.eval()
@@ -34,7 +34,7 @@ def visualize_top_errors(model, test_dataloader, model_name, top_n=5, save_path=
         batch_count = 0
         for sequence, target in test_dataloader:
             sequence = sequence.to(device)
-            target = target.to(device)
+            target = target.to(device) # (batch_size, sequence_length)
             output = model(sequence)  # (batch_size, sequence_length, 2)
 
             for i in range(sequence.size(0)):
@@ -44,17 +44,17 @@ def visualize_top_errors(model, test_dataloader, model_name, top_n=5, save_path=
             batch_count += 1
 
     top_errors = sorted(errors, key=lambda x: x[1], reverse=True)[:top_n]
-
+    print(sorted(errors, key=lambda x: x[1], reverse=True))
     sequences = []
     targets = []
     outputs = []
     class_to_idx = {0: 'no_press', 1: 'press'}
 
     for i, (sequence_idx, error_count) in enumerate(top_errors):
-        sequence, target = test_dataloader.dataset[sequence_idx] # sequence: (sequence_length, 1, 32, 32), target: int
+        sequence, target = test_dataloader.dataset[sequence_idx] # sequence: (sequence_length, 1, 32, 32), target: sequence_length
         output = model(sequence.unsqueeze(0).to(device))
         sequences.append(sequence)
-        targets.append(target)
+        targets.append(target.tolist())
         outputs.append(output)
 
     fig, axs = plt.subplots(1, top_n, figsize=(top_n * 4, 4))
@@ -64,23 +64,23 @@ def visualize_top_errors(model, test_dataloader, model_name, top_n=5, save_path=
 
     def init():
         for i, (sequence_idx, error_count) in enumerate(top_errors):
-            img = axs[i].imshow(sequences[i][0].squeeze(), cmap='gray')
-            axs[i].set_title(f"Target: {class_to_idx[targets[i]]}, Error count: {error_count} ")
+            img = axs[i].imshow(sequences[i][0].squeeze(), cmap='gray', vmin=-0.5, vmax=0.5)
+            axs[i].set_title(f"Sequence: {sequence_idx}, Errors: {error_count}")
         return img,
 
     def animate(i):
         for j, (sequence_idx, error_count) in enumerate(top_errors):
-            img = axs[j].imshow(sequences[j][i].squeeze(), cmap='gray')
-            axs[j].set_title(f"Target: {class_to_idx[targets[j]]}, Error count: {error_count} ")
+            img = axs[j].imshow(sequences[j][i].squeeze(), cmap='gray', vmin=-0.5, vmax=0.5)
+            axs[j].set_title(f"Sequence: {sequence_idx}, Errors: {error_count}")
             # Clear previous text
             for txt in axs[j].texts:
                 txt.set_visible(False)
-            # Display the prediction of the model on the top right corner
-            axs[j].text(0.95, 0.05, f"Prediction: {class_to_idx[outputs[j][0][i].argmax(dim=-1).item()]}", color='white',
-                        ha='right', va='bottom', transform=axs[j].transAxes)
+            # Display the prediction and label underneath the image
+            axs[j].text(0.5, -0.1, f"Prediction: {class_to_idx[outputs[j][0][i].argmax(dim=-1).item()]}, Label: {class_to_idx[targets[j][i]]}", color='black',
+                        ha='center', va='top', transform=axs[j].transAxes)
 
         return img,
 
     ani = animation.FuncAnimation(fig, animate, frames=sequences[0].size(0), init_func=init, interval=100, blit=True)
-    ani.save(save_path, writer='ffmpeg', fps=30)
+    ani.save(save_path, writer='ffmpeg', fps=10)
     plt.show()
