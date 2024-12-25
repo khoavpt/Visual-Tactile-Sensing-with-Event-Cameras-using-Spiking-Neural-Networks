@@ -44,10 +44,16 @@ def main(cfg: DictConfig):
     trainer.fit(model, train_dataloader, test_dataloader)
 
     # Log model configs and results
-    loss_logger.plot_results()
+    loss_logger.plot_results(save_path=os.path.join(ROOTPATH, "figures", f"{cfg.model._target_}_results.png"))
     logger.info(f"Data config: {cfg.data_module}")
     logger.info(f"Model config: {cfg.model}")
     logger.info(f"Trainer config: {cfg.trainer}")
+    
+    logger.info(f"Train losses: {loss_logger.train_losses}")
+    logger.info(f"Train accuracies: {loss_logger.train_accuracies}")
+    logger.info(f"Validation losses: {loss_logger.val_losses}")
+    logger.info(f"Validation accuracies: {loss_logger.val_accuracies}")
+    logger.info(f"Epoch durations: {loss_logger.epoch_durations}")
 
     return
 

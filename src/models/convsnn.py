@@ -3,6 +3,8 @@ import snntorch.functional as SF
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class ConvSNN(pl.LightningModule):
     def __init__(self, beta_init, spikegrad=snn, in_channels=1):
@@ -36,6 +38,8 @@ class ConvSNN(pl.LightningModule):
                 x (torch.Tensor): Input tensor of shape (batch_size, seq_len, channels, height, width)
         """
         batch_size, sequence_length, channels, height, width = x.size()
+
+        # Unnormalized x
 
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
@@ -98,4 +102,16 @@ class ConvSNN(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.0003)
+        optimizer = optim.Adam(self.parameters(), lr=0.001)
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': scheduler,
+                'monitor': 'val_loss',
+                'interval': 'epoch',
+                'frequency': 1
+            }
+        }
+
+

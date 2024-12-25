@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
+import time
 
 class LossLogger(pl.Callback):
     def __init__(self, model_name):
@@ -7,23 +8,33 @@ class LossLogger(pl.Callback):
         self.train_accuracies = []
         self.val_losses = []
         self.val_accuracies = []
-        self.test_error_counts = [] # list of (sequence index, error_count_of_each_sequence)
+        self.epoch_durations = []
         self.model_name = model_name
     
+    def on_train_epoch_start(self, trainer, pl_module):
+        self.epoch_start_time = time.time()
+    
     def on_train_epoch_end(self, trainer, pl_module):
+        epoch_duration = time.time() - self.epoch_start_time
+        self.epoch_durations.append(epoch_duration)
+        
         train_loss = trainer.callback_metrics.get('train_loss')
         train_accuracy = trainer.callback_metrics.get('train_accuracy')
-        self.train_losses.append(train_loss.item())
-        self.train_accuracies.append(train_accuracy.item())
+        if train_loss is not None:
+            self.train_losses.append(train_loss.item())
+        if train_accuracy is not None:
+            self.train_accuracies.append(train_accuracy.item())
     
     def on_validation_epoch_end(self, trainer, pl_module):
         val_loss = trainer.callback_metrics.get('val_loss')
         val_accuracy = trainer.callback_metrics.get('val_accuracy')
-        self.val_losses.append(val_loss.item())
-        self.val_accuracies.append(val_accuracy.item())
+        if val_loss is not None:
+            self.val_losses.append(val_loss.item())
+        if val_accuracy is not None:
+            self.val_accuracies.append(val_accuracy.item())
 
-    def plot_results(self):
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6))
+    def plot_results(self, save_path=None):
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
         ax1.plot(self.train_losses, label='Train Loss')
         ax1.plot(self.val_losses, label='Validation Loss')
@@ -36,5 +47,9 @@ class LossLogger(pl.Callback):
         ax2.set_ylabel('Accuracy')
 
         plt.legend()
-        plt.suptitle(f'Training and Validation Loss and Accuracy of the {self.model_name} model')
-        plt.show()
+        plt.suptitle(f'Training and Validation Loss, Accuracy of the {self.model_name} model')
+        
+        if save_path:
+            plt.savefig(save_path)
+        else:
+            plt.show()

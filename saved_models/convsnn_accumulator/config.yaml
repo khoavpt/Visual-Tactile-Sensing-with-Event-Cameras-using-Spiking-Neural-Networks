@@ -1,16 +1,19 @@
 data_module:
-  batch_size: 32
-  num_workers: 1
+  batch_size: 64
+  num_workers: 47
   frame_duration: 10
   encoding_type: accumulate
   sequence_length: 300
+  steps: 100
   input_dir: data/raw_data
   output_dir: data/seq_data
 model:
-  _target_: src.models.convlstm.ConvLSTM
+  _target_: src.models.convsnn.ConvSNN
+  beta_init: 0.9
+  spikegrad: fast_sigmoid
   in_channels: 1
-  feature_size: 256
 trainer:
   _target_: pytorch_lightning.Trainer
-  max_epochs: 20
-  accelerator: cpu
+  max_epochs: 50
+  accelerator: gpu
+  devices: 1

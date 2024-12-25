@@ -1,7 +1,9 @@
 import os
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader, Subset
 from torchvision import transforms
+from sklearn.model_selection import StratifiedKFold
+import numpy as np
 
 class CustomSequenceDataset(Dataset):
     def __init__(self, root_dir, transform=None):
@@ -33,7 +35,7 @@ class CustomSequenceDataset(Dataset):
             sequence = torch.stack([self.transform(frame) for frame in sequence])
         
         return sequence, label
-    
+
 def create_dataloader(
         data_dir: str,
         batch_size: int,
@@ -46,16 +48,16 @@ def create_dataloader(
     
     dataset = CustomSequenceDataset(root_dir=data_dir)
    
-    # Split ratio
-    train_ratio = 0.8
-    test_ratio = 0.2
+    # Extract labels for stratification
+    labels = [torch.load(path)['label'] for path in dataset.samples]
+    labels = np.array([torch.sum(label).item() for label in labels])  # Sum of press events in each label
 
-    # Calculate the lengths for training and testing
-    dataset_size = len(dataset)
-    train_size = int(dataset_size * train_ratio)
-    test_size = dataset_size - train_size
+    # Stratified split
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    train_idx, test_idx = next(skf.split(np.zeros(len(labels)), labels))
 
-    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+    train_dataset = Subset(dataset, train_idx)
+    test_dataset = Subset(dataset, test_idx)
 
     train_dataset.dataset.transform = train_transform
 
@@ -68,9 +70,24 @@ def create_dataloader(
                                  shuffle=False,
                                  num_workers=num_workers)
 
-    print(f"Total number of sequences: {dataset_size}")
+    print(f"Total number of sequences: {len(dataset)}")
     print(f"Number of training sequences: {len(train_dataset)}")
     print(f"Number of test sequences: {len(test_dataset)}")
+
+    # Count press and no press events in train and test sets
+    def count_press_nopress(dataloader):
+        press_count = 0
+        nopress_count = 0
+        for _, labels in dataloader:
+            press_count += labels.sum().item()
+            nopress_count += (labels.size(0) * labels.size(1)) - labels.sum().item()
+        return press_count, nopress_count
+
+    train_press, train_nopress = count_press_nopress(train_dataloader)
+    test_press, test_nopress = count_press_nopress(test_dataloader)
+
+    print(f"Training set - Press: {train_press}, No Press: {train_nopress}")
+    print(f"Test set - Press: {test_press}, No Press: {test_nopress}")
 
     print("Training DataLoader:")
     for images, labels in train_dataloader:

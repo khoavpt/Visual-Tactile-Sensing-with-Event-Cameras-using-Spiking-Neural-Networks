@@ -23,7 +23,7 @@ def plot_results(train_losses, val_losses, train_accs, val_accs, model_name, sav
     else:
         plt.show()
 
-def visualize_top_errors(model, test_dataloader, model_name, top_n=5, save_path='top_errors.mp4'):    
+def visualize_top_errors(model, test_dataloader, model_name, top_n=10, save_path='top_errors.mp4'):    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     model.eval()
@@ -57,7 +57,8 @@ def visualize_top_errors(model, test_dataloader, model_name, top_n=5, save_path=
         targets.append(target.tolist())
         outputs.append(output)
 
-    fig, axs = plt.subplots(1, top_n, figsize=(top_n * 4, 4))
+    fig, axs = plt.subplots(2, 5, figsize=(20, 8))
+    axs = axs.flatten()
     for ax in axs:
         ax.axis('off')
     plt.suptitle(f'Top {top_n} errors of the {model_name} model')

@@ -79,20 +79,23 @@ def preprocess_frames(frames, target_size=(32, 32)):
     preprocessed_frames = [transform(frame) for frame in frames]
     return preprocessed_frames
 
-def create_sequence(frames, labels, sequence_length=30):
+def create_sequence(frames, labels, sequence_length=300, steps=100):
     """
-    Split a list of frames into sequences of a fixed length, each with their corresponding labels.
+    Split a list of frames into sequences of a fixed length using the sliding window approach, each with their corresponding labels.
     Args:
         frames: list of frames
         labels: list of labels
         sequence_length: int
+        step: int, step size for the sliding window
     Returns:
         list of sequences of frames
         list of sequences of labels
     """
     sequence = []
     sequence_labels = []
-    for i in range(0, len(frames) - sequence_length, sequence_length):
+    for i in range(0, len(frames) - sequence_length + 1, steps):
+        if labels[i] == 1:
+            continue
         sequence.append(frames[i:i + sequence_length])
         sequence_labels.append(labels[i:i + sequence_length])
 
@@ -103,6 +106,7 @@ def aedat4_to_sequences(
         output_dir: str, 
         duration: int = 10,
         sequence_length: int = 300,
+        steps: int = 100,
         encoding_type: str = 'accumulate'
     ):
     """
@@ -125,7 +129,7 @@ def aedat4_to_sequences(
                 encoding_type=encoding_type
             )
             frames = preprocess_frames(frames) # add transformations
-            sequences, sequence_labels = create_sequence(frames, labels, sequence_length=sequence_length)
+            sequences, sequence_labels = create_sequence(frames, labels, sequence_length=sequence_length, steps=steps)
             
             os.makedirs(output_dir, exist_ok=True)
             for i, (sequence, sequence_label) in enumerate(zip(sequences, sequence_labels)):

@@ -26,6 +26,7 @@ def main(cfg: DictConfig):
         output_dir=seq_data_dir,
         duration=cfg.data_module.frame_duration,
         sequence_length=cfg.data_module.sequence_length,
+        steps=cfg.data_module.steps,
         encoding_type=cfg.data_module.encoding_type,
     )
 

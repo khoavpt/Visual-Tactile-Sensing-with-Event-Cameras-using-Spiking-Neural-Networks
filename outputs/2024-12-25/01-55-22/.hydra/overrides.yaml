@@ -1,3 +1,0 @@
-- data_module.input_dir=data/raw_data
-- data_module.output_dir=data/seq_data
-- data_module.encoding_type=accumulate
