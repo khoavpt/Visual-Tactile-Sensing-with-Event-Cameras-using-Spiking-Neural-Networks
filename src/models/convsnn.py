@@ -5,10 +5,12 @@ import torch.nn as nn
 import pytorch_lightning as pl
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import torchmetrics.functional as F
 
 class ConvSNN(pl.LightningModule):
-    def __init__(self, beta_init, spikegrad=snn, in_channels=1):
+    def __init__(self, beta_init, spikegrad="fast_sigmoid", in_channels=1, lr=0.001):
         super().__init__()
+        self.lr = lr
 
         if spikegrad == 'fast_sigmoid':
             spikegrad = snn.surrogate.fast_sigmoid()
@@ -20,17 +22,17 @@ class ConvSNN(pl.LightningModule):
             raise ValueError(f"Unknown surrogate gradient function: {spikegrad}")
 
         self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=6, kernel_size=5)
-        self.lif1 = snn.Leaky(beta=beta_init, spike_grad=spikegrad)
-        self.pool1 = nn.AvgPool2d(kernel_size=2, stride=2) # Output: (batch_size, 6, 14, 14)
+        self.lif1 = snn.Leaky(beta=beta_init, spike_grad=spikegrad, threshold=0.5, learn_beta=True, learn_threshold=True)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (batch_size, 6, 14, 14)
 
         self.conv2 = nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5)
-        self.lif2 = snn.Leaky(beta=beta_init, spike_grad=spikegrad)
-        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2) # Output: (batch_size, 16, 5, 5)
+        self.lif2 = snn.Leaky(beta=beta_init, spike_grad=spikegrad, threshold=0.5, learn_beta=True, learn_threshold=True)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (batch_size, 16, 5, 5)
 
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.lif3 = snn.Leaky(beta=beta_init, spike_grad=spikegrad, learn_beta=True, learn_threshold=True)
+        self.lif3 = snn.Leaky(beta=beta_init, spike_grad=spikegrad, learn_beta=True, learn_threshold=True, threshold=0.5)
         self.fc2 = nn.Linear(120, 2)
-        self.lif4 = snn.Leaky(beta=beta_init, spike_grad=spikegrad, learn_beta=True, learn_threshold=True)
+        self.lif4 = snn.Leaky(beta=beta_init, spike_grad=spikegrad, learn_beta=True, learn_threshold=True, threshold=0.1)
 
     def forward(self, x):
         """
@@ -38,8 +40,7 @@ class ConvSNN(pl.LightningModule):
                 x (torch.Tensor): Input tensor of shape (batch_size, seq_len, channels, height, width)
         """
         batch_size, sequence_length, channels, height, width = x.size()
-
-        # Unnormalized x
+        
 
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
@@ -65,44 +66,49 @@ class ConvSNN(pl.LightningModule):
             x_t = self.fc2(spk3) # (batch_size, output_size)
             spk4, mem4 = self.lif4(x_t, mem4) # (batch_size, output_size)
 
-            spk4_rec.append(spk4)
             mem4_rec.append(mem4)
         
-        return torch.stack(spk4_rec, dim=1)# (batch_size, sequence_length,  output_size)
-
+        return torch.stack(mem4_rec, dim=1)# (batch_size, sequence_length,  output_size)
+    
     def common_step(self, batch, batch_idx):
-        sequence, target = batch # Sequence: (batch_size, sequence_length, channels, height, width), target: (batch_size, sequence_length)
-        spk_rec = self(sequence)  # (batch_size, sequence_length, num_classes)
-        
+        sequence, target = batch  # Sequence: (batch_size, sequence_length, channels, height, width), target: (batch_size, sequence_length)
+        output = self(sequence)  # (batch_size, sequence_length, num_classes)
+
         # Calculate loss
         loss = 0
         for t in range(sequence.size(1)):
-            loss += nn.CrossEntropyLoss()(spk_rec[:, t], target[:, t])
+            loss += nn.CrossEntropyLoss()(output[:, t], target[:, t])
         loss /= sequence.size(1)  # Average loss over the sequence length
-        
+
         # Calculate accuracy
-        preds = spk_rec.argmax(dim=-1)  # (batch_size, sequence_length)
+        preds = output.argmax(dim=-1)  # (batch_size, sequence_length)
         correct = (preds == target).sum()
         total = target.numel()
         accuracy = correct / total
-        return loss, accuracy
-    
-    def training_step(self, batch, batch_idx):
-        loss, accuracy = self.common_step(batch, batch_idx)
 
-        self.log('train_loss', loss.item(), on_epoch=True, prog_bar=True, logger=True)
+        # Calculate F1 score
+        f1 = F.f1_score(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+
+        return loss, accuracy, f1
+
+    def training_step(self, batch, batch_idx):
+        loss, accuracy, f1 = self.common_step(batch, batch_idx)
+
+        self.log('train_loss', loss, on_epoch=True, prog_bar=True, logger=True)
         self.log('train_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_f1', f1, on_epoch=True, prog_bar=True, logger=True)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, accuracy = self.common_step(batch, batch_idx)
+        loss, accuracy, f1 = self.common_step(batch, batch_idx)
 
-        self.log('val_loss', loss.item(), on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
-        return loss
+        self.log('val_f1', f1, on_epoch=True, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=0.001)
+        optimizer = optim.Adam(self.parameters(), lr=self.lr)
         scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
         return {
             'optimizer': optimizer,
@@ -113,5 +119,4 @@ class ConvSNN(pl.LightningModule):
                 'frequency': 1
             }
         }
-
 

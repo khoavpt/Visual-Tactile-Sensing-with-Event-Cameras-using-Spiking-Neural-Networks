@@ -1,0 +1,19 @@
+data_module:
+  batch_size: 64
+  num_workers: 47
+  frame_duration: 10
+  encoding_type: accumulate
+  sequence_length: 300
+  steps: 100
+  input_dir: data/raw_data
+  output_dir: data/seq_data
+model:
+  _target_: src.models.convlstm.ConvLSTM
+  in_channels: 1
+  feature_size: 256
+  lr: 0.001
+trainer:
+  _target_: pytorch_lightning.Trainer
+  max_epochs: 50
+  accelerator: gpu
+  devices: 1

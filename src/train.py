@@ -51,8 +51,10 @@ def main(cfg: DictConfig):
     
     logger.info(f"Train losses: {loss_logger.train_losses}")
     logger.info(f"Train accuracies: {loss_logger.train_accuracies}")
+    logger.info(f"Train F1 scores: {loss_logger.train_f1s}")
     logger.info(f"Validation losses: {loss_logger.val_losses}")
     logger.info(f"Validation accuracies: {loss_logger.val_accuracies}")
+    logger.info(f"Validation F1 scores: {loss_logger.val_f1s}")
     logger.info(f"Epoch durations: {loss_logger.epoch_durations}")
 
     return

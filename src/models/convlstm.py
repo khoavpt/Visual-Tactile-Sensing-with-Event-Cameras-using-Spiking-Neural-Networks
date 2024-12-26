@@ -3,6 +3,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import torchmetrics.functional as F
 
 class CNN(nn.Module):
     def __init__(self, in_channels, output_size):
@@ -14,7 +15,7 @@ class CNN(nn.Module):
                       stride=1,
                       padding=0),
             nn.ReLU(),
-            nn.AvgPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=2, stride=2)
         )
         self.conv_block_2 = nn.Sequential(
             nn.Conv2d(in_channels=6,
@@ -23,7 +24,7 @@ class CNN(nn.Module):
                       stride=1,
                       padding=0),
             nn.ReLU(),
-            nn.AvgPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=2, stride=2)
         )
         self.fc1 = nn.Linear(16 * 5 * 5, output_size)
 
@@ -39,8 +40,9 @@ class CNN(nn.Module):
         return x
 
 class ConvLSTM(pl.LightningModule):
-    def __init__(self, in_channels, feature_size):
+    def __init__(self, in_channels, feature_size, lr=0.001):
         super().__init__()
+        self.lr = lr
         self.cnn = CNN(in_channels, feature_size)
         self.lstm = nn.LSTM(input_size=feature_size,
                             hidden_size=128,
@@ -62,37 +64,44 @@ class ConvLSTM(pl.LightningModule):
         return x
 
     def common_step(self, batch, batch_idx):
-        sequence, target = batch # Sequence: (batch_size, sequence_length, channels, height, width), target: (batch_size, sequence_length)
+        sequence, target = batch  # Sequence: (batch_size, sequence_length, channels, height, width), target: (batch_size, sequence_length)
         output = self(sequence)  # (batch_size, sequence_length, num_classes)
-        
+
         # Calculate loss
         loss = 0
         for t in range(sequence.size(1)):
             loss += nn.CrossEntropyLoss()(output[:, t], target[:, t])
         loss /= sequence.size(1)  # Average loss over the sequence length
-        
+
         # Calculate accuracy
         preds = output.argmax(dim=-1)  # (batch_size, sequence_length)
         correct = (preds == target).sum()
         total = target.numel()
         accuracy = correct / total
-        return loss, accuracy
+
+        # Calculate F1 score
+        f1 = F.f1_score(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+
+        return loss, accuracy, f1
 
     def training_step(self, batch, batch_idx):
-        loss, accuracy = self.common_step(batch, batch_idx)
-        
+        loss, accuracy, f1 = self.common_step(batch, batch_idx)
+
         self.log('train_loss', loss, on_epoch=True, prog_bar=True, logger=True)
         self.log('train_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_f1', f1, on_epoch=True, prog_bar=True, logger=True)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, accuracy = self.common_step(batch, batch_idx)
-        
+        loss, accuracy, f1 = self.common_step(batch, batch_idx)
+
         self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_f1', f1, on_epoch=True, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=0.001)
+        optimizer = optim.Adam(self.parameters(), lr=self.lr)
         scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
         return {
             'optimizer': optimizer,

@@ -8,6 +8,8 @@ class LossLogger(pl.Callback):
         self.train_accuracies = []
         self.val_losses = []
         self.val_accuracies = []
+        self.train_f1s = []
+        self.val_f1s = []
         self.epoch_durations = []
         self.model_name = model_name
     
@@ -20,18 +22,24 @@ class LossLogger(pl.Callback):
         
         train_loss = trainer.callback_metrics.get('train_loss')
         train_accuracy = trainer.callback_metrics.get('train_accuracy')
+        train_f1 = trainer.callback_metrics.get('train_f1')
         if train_loss is not None:
             self.train_losses.append(train_loss.item())
         if train_accuracy is not None:
             self.train_accuracies.append(train_accuracy.item())
-    
+        if train_f1 is not None:
+            self.train_f1s.append(train_f1.item())
+
     def on_validation_epoch_end(self, trainer, pl_module):
         val_loss = trainer.callback_metrics.get('val_loss')
         val_accuracy = trainer.callback_metrics.get('val_accuracy')
+        val_f1 = trainer.callback_metrics.get('val_f1')
         if val_loss is not None:
             self.val_losses.append(val_loss.item())
         if val_accuracy is not None:
             self.val_accuracies.append(val_accuracy.item())
+        if val_f1 is not None:
+            self.val_f1s.append(val_f1.item())
 
     def plot_results(self, save_path=None):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))

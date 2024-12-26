@@ -1,0 +1,6 @@
+_target_: src.models.convsnnl.ConvSNN_L
+beta_init: 0.9
+spikegrad: fast_sigmoid
+in_channels: 1
+L: 15
+lr: 0.001
