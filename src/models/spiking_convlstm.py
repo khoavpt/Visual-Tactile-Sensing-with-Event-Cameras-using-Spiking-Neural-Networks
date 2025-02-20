@@ -45,7 +45,7 @@ class SpikingConvLSTM(pl.LightningModule):
                                reset_mechanism="subtract")
         
         self.fc2 = nn.Linear(128, 2)
-        self.lif4 = snn.Leaky(beta=beta_init, spike_grad=spikegrad, reset_mechanism="subtract", learn_beta=True, learn_threshold=True, threshold=0.1)
+        self.lif4 = snn.Leaky(beta=beta_init, spike_grad=spikegrad, reset_mechanism="subtract", learn_beta=True, learn_threshold=True, threshold=0.5)
 
         # self._init_parameters()
 

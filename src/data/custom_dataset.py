@@ -41,10 +41,10 @@ def create_dataloader(
         batch_size: int,
         num_workers: int = 1
 ):
-    train_transform = transforms.Compose([
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomVerticalFlip(p=0.5),
-    ])
+    # train_transform = transforms.Compose([
+    #     transforms.RandomHorizontalFlip(p=0.5),
+    #     transforms.RandomVerticalFlip(p=0.5),
+    # ])
     
     dataset = CustomSequenceDataset(root_dir=data_dir)
    
@@ -59,7 +59,7 @@ def create_dataloader(
     train_dataset = Subset(dataset, train_idx)
     test_dataset = Subset(dataset, test_idx)
 
-    train_dataset.dataset.transform = train_transform
+    # train_dataset.dataset.transform = train_transform
 
     train_dataloader = DataLoader(dataset=train_dataset,
                                   batch_size=batch_size,

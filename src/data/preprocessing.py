@@ -11,6 +11,13 @@ ROOTPATH = rootutils.setup_root(__file__, indicator=".project_root", pythonpath=
 
 import src.data.events_encoding as ev_enc
 
+normalize_param = {
+    'accumulate': (0.5, 0.01),
+    'time_surface': (0.0, 0.03),
+    'custom': (0.0, 0.003)
+}
+
+
 def dv_data_frame_tSlice(file_path, press_times_list, duration=10, encoding_type='accumulate' ):
     """
     Extract frames from a .aedat4 file using a time slice.
@@ -62,7 +69,9 @@ def dv_data_frame_tSlice(file_path, press_times_list, duration=10, encoding_type
             slicer.accept(events)
     return frames, labels
 
-def preprocess_frames(frames, target_size=(32, 32)):
+def preprocess_frames(frames, encoding_type='accumulate', target_size=(32, 32)):
+    mean, std = normalize_param[encoding_type]
+
     class ClipTransform:
         def __call__(self, img):
             return torch.clamp(img, 0, 1)
@@ -73,10 +82,33 @@ def preprocess_frames(frames, target_size=(32, 32)):
         transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),         # Convert images to tensor
         ClipTransform(),               # Clip values to be inside [0, 1]
-        transforms.Normalize(mean=[0.5], std=[0.25])  # Normalize
+        transforms.Normalize(mean=mean, std=std)  # Normalize
     ])
+
+    # class SplitChannelsTransform:
+    #     def __call__(self, img):
+    #         return img[0], img[1]
+
+    # class MergeChannelsTransform:
+    #     def __call__(self, imgs):
+    #         return torch.stack(imgs)
+
+    # class RemoveExtraChannelTransform:
+    #     def __call__(self, img):
+    #         return img.squeeze(0)  # Remove the extra channel dimension
+
+    # transform = transforms.Compose([
+    #     SplitChannelsTransform(),
+    #     transforms.Lambda(lambda imgs: [transforms.ToPILImage()(img) for img in imgs]),
+    #     transforms.Lambda(lambda imgs: [transforms.Resize(target_size)(img) for img in imgs]),
+    #     transforms.Lambda(lambda imgs: [transforms.ToTensor()(img) for img in imgs]),
+    #     transforms.Lambda(lambda imgs: [ClipTransform()(img) for img in imgs]),
+    #     # transforms.Lambda(lambda imgs: [transforms.Normalize(mean=[mean], std=[std])(img) for img in imgs]),
+    #     transforms.Lambda(lambda imgs: [RemoveExtraChannelTransform()(img) for img in imgs]),
+    #     MergeChannelsTransform()
+    # ])
     
-    preprocessed_frames = [transform(frame) for frame in frames]
+    preprocessed_frames = [transform(frame) for frame in frames] # List of tensors, each of shape (2, H, W)
     return preprocessed_frames
 
 def create_sequence(frames, labels, sequence_length=300, steps=100):
@@ -128,7 +160,7 @@ def aedat4_to_sequences(
                 duration=duration,
                 encoding_type=encoding_type
             )
-            frames = preprocess_frames(frames) # add transformations
+            frames = preprocess_frames(frames, encoding_type=encoding_type) # add transformations
             sequences, sequence_labels = create_sequence(frames, labels, sequence_length=sequence_length, steps=steps)
             
             os.makedirs(output_dir, exist_ok=True)

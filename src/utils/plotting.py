@@ -71,7 +71,7 @@ def visualize_top_errors(model, test_dataloader, model_name, top_n=10, save_path
 
     def animate(i):
         for j, (sequence_idx, error_count) in enumerate(top_errors):
-            img = axs[j].imshow(sequences[j][i].squeeze(), cmap='gray', vmin=-0.5, vmax=0.5)
+            img = axs[j].imshow(sequences[j][i].squeeze(), cmap='gray', vmin=-3, vmax=3)
             axs[j].set_title(f"Sequence: {sequence_idx}, Errors: {error_count}")
             # Clear previous text
             for txt in axs[j].texts:

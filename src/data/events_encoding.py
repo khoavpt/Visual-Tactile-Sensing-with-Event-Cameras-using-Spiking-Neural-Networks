@@ -46,7 +46,7 @@ def timesurface_dv_encode(events: dv.EventStore, resolution: tuple[int, int]) ->
     surfacer.accept(events)
 
     frame = surfacer.generateFrame()
-    return frame.image
+    return frame.image # Shape: (H, W)
 
 def custom_encode(events: dv.EventStore, resolution: tuple[int, int]) -> np.ndarray:
     H, W = resolution
@@ -77,4 +77,4 @@ def custom_encode(events: dv.EventStore, resolution: tuple[int, int]) -> np.ndar
     # Accumulate OFF events
     np.add.at(frame_off, (x_array[off_mask], y_array[off_mask]), encoded_times[off_mask])
 
-    return np.stack([frame_on, frame_off], axis=0)
+    return np.stack([frame_on, frame_off], axis=0) # Shape: (2, H, W)
