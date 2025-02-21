@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Inference</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        select {
+            margin: 10px;
+            padding: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .input-group {
+        margin-bottom: 15px;
+        }
+        .input-group label {
+            margin-right: 20px;
+        }
+        #data_select.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Real-time Inference Stream</h1>
+        
+        <div class="controls">
+            <div class="input-group">
+                <label><input type="radio" name="source" value="file" checked> Recorded File</label>
+                <label><input type="radio" name="source" value="live"> Live Camera</label>
+            </div>
+        
+            <select id="model_select">
+                <option value="">Select Model</option>
+                {% for model in models %}
+                <option value="{{ model }}">{{ model }}</option>
+                {% endfor %}
+            </select>
+        
+            <select id="data_select">
+                <option value="">Select Data File</option>
+                {% for file in data_files %}
+                <option value="{{ file }}">{{ file }}</option>
+                {% endfor %}
+            </select>
+        
+            <button onclick="startProcessing()">Start Processing</button>
+        </div>
+
+        <img id="video_feed" style="width: 640px; height: 480px;">
+    </div>
+
+    <script>
+        var socket = io.connect("http://" + document.domain + ":" + location.port);
+
+        socket.on("frame", function(data) {
+            document.getElementById("video_feed").src = "data:image/jpeg;base64," + btoa(String.fromCharCode.apply(null, new Uint8Array(data.image)));
+        });
+
+        // Add this function to toggle data file selection visibility
+    document.querySelectorAll('input[name="source"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const dataSelect = document.getElementById('data_select');
+            dataSelect.classList.toggle('hidden', this.value === 'live');
+        });
+    });
+
+    function startProcessing() {
+        const model = document.getElementById('model_select').value;
+        const sourceType = document.querySelector('input[name="source"]:checked').value;
+        const data = sourceType === 'live' ? null : document.getElementById('data_select').value;
+        
+        if (!model || (sourceType === 'file' && !data)) {
+            alert('Please select required options');
+            return;
+        }
+
+        fetch('/start_processing', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: model,
+                data: data,
+                source_type: sourceType
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'error') {
+                alert('Error: ' + data.message);
+            }
+        });
+    }
+</script>

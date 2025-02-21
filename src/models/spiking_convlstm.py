@@ -74,6 +74,31 @@ class SpikingConvLSTM(pl.LightningModule):
         self.slstm.lstm_cell._parameters['bias_hh'] = model.lstm._parameters['bias_hh_l0']
         print("Pretrained weight loaded successfully.")
 
+    def process_frame(self, x, mem1, mem2, mem3, syn4, mem4, mem5):
+        """ 
+        Process a single frame
+        x: (batch_size, channels, height, width)
+        """
+        batch_size, channels, height, width = x.size()
+
+        x = self.conv1(x)
+        spk1, mem1 = self.lif1(x, mem1)
+        x = self.pool1(spk1)
+
+        x = self.conv2(x)
+        spk2, mem2 = self.lif2(x, mem2)
+        x = self.pool2(spk2)
+
+        x = x.view(batch_size, -1)
+        x = self.fc1(x)
+        spk3, mem3 = self.lif3(x, mem3)
+
+        spk4, syn4, mem4 = self.slstm(spk3, syn4, mem4)
+        x = self.fc2(spk4)
+        spk5, mem5 = self.lif4(x, mem5)
+
+        return mem5, mem1, mem2, mem3, syn4, mem4, mem5
+
     def forward(self, x):
         """
             Args:
@@ -87,30 +112,15 @@ class SpikingConvLSTM(pl.LightningModule):
         syn4, mem4 = self.slstm.init_slstm()
         mem5 = self.lif4.init_leaky()
 
-        spk5_rec = []
-        mem5_rec = []
+        outputs = []
 
         for t in range(sequence_length):
-            x_t = x[:, t] # (batch_size, channels, height, width)
-            x_t = self.conv1(x_t) # (batch_size, 6, 28, 28)
-            spk1, mem1 = self.lif1(x_t, mem1) # (batch_size, 6, 28, 28)
-            x_t = self.pool1(spk1) # (batch_size, 6, 14, 14)
+            frame = x[:, t]  # Extract frame at time t
+            output, mem1, mem2, mem3, syn4, mem4, mem5 = self.process_frame(frame, mem1, mem2, mem3, syn4, mem4, mem5)  # Use the new function
+            outputs.append(output)
 
-            x_t = self.conv2(x_t) # (batch_size, 16, 10, 10)
-            spk2, mem2 = self.lif2(x_t, mem2) # (batch_size, 16, 10, 10) 
-            x_t = self.pool2(spk2) # (batch_size, 16, 5, 5)
 
-            x_t = x_t.view(batch_size, -1) # (batch_size, 16 * 5 * 5)
-            x_t = self.fc1(x_t) # (batch_size, 120)
-            spk3, mem3 = self.lif3(x_t, mem3) # (batch_size, 120)
-
-            spk4, syn4, mem4 = self.slstm(spk3, syn4, mem4)
-            x_t = self.fc2(spk4) # (batch_size, 2)
-            spk5, mem5 = self.lif4(x_t, mem5) # (batch_size, 2)
-
-            mem5_rec.append(mem5)
-
-        return torch.stack(mem5_rec, dim=1)# (batch_size, sequence_length,  output_size)
+        return torch.stack(outputs, dim=1)# (batch_size, sequence_length,  output_size)
 
     def common_step(self, batch, batch_idx):
         sequence, target = batch  # Sequence: (batch_size, sequence_length, channels, height, width), target: (batch_size, sequence_length)

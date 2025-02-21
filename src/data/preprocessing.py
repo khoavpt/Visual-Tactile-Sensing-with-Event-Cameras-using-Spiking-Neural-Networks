@@ -72,6 +72,15 @@ def dv_data_frame_tSlice(file_path, press_times_list, duration=10, encoding_type
 def preprocess_frames(frames, encoding_type='accumulate', target_size=(32, 32)):
     mean, std = normalize_param[encoding_type]
 
+
+    class MinMaxTransform:
+        def __call__(self, img):
+            min_val = img.min()
+            max_val = img.max()
+            if max_val > min_val:  # Avoid division by zero
+                img = (img - min_val) / (max_val - min_val)
+            return img
+    
     class ClipTransform:
         def __call__(self, img):
             return torch.clamp(img, 0, 1)
