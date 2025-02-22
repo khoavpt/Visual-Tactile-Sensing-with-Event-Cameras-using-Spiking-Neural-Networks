@@ -72,7 +72,6 @@ def dv_data_frame_tSlice(file_path, press_times_list, duration=10, encoding_type
 def preprocess_frames(frames, encoding_type='accumulate', target_size=(32, 32)):
     mean, std = normalize_param[encoding_type]
 
-
     class MinMaxTransform:
         def __call__(self, img):
             min_val = img.min()
@@ -90,8 +89,9 @@ def preprocess_frames(frames, encoding_type='accumulate', target_size=(32, 32)):
         transforms.Resize(target_size),  # Resize the images if needed
         transforms.Grayscale(num_output_channels=1),
         transforms.ToTensor(),         # Convert images to tensor
-        ClipTransform(),               # Clip values to be inside [0, 1]
-        transforms.Normalize(mean=mean, std=std)  # Normalize
+        # ClipTransform(),               # Clip values to be inside [0, 1]
+        # transforms.Normalize(mean=mean, std=std)  # Normalize
+        MinMaxTransform()
     ])
 
     # class SplitChannelsTransform:

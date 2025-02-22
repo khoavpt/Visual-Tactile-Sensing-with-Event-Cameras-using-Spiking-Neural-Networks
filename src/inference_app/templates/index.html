@@ -37,6 +37,17 @@
         #data_select.hidden {
             display: none;
         }
+        .prediction-display {
+            margin-top: 20px;
+            text-align: center;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        #prediction {
+            font-weight: bold;
+            color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -67,6 +78,9 @@
         </div>
 
         <img id="video_feed" style="width: 640px; height: 480px;">
+        <div class="prediction-display">
+            <h2>Current Prediction: <span id="prediction">Waiting...</span></h2>
+        </div>
     </div>
 
     <script>
@@ -74,6 +88,10 @@
 
         socket.on("frame", function(data) {
             document.getElementById("video_feed").src = "data:image/jpeg;base64," + btoa(String.fromCharCode.apply(null, new Uint8Array(data.image)));
+        });
+
+        socket.on("prediction", function(data) {
+            document.getElementById("prediction").textContent = data.label;
         });
 
         // Add this function to toggle data file selection visibility

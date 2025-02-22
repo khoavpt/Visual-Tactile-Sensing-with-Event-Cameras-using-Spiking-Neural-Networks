@@ -1,4 +1,4 @@
-# filepath: /c:/Users/LENOVO/OneDrive/uet/lab/spike-neural-networks/Spiking-neural-networks-for-event-cameras/tactile_experiment/src/train.py
+import torch
 import rootutils
 import pytorch_lightning as pl
 import hydra
@@ -13,9 +13,13 @@ CONFIG_PATH = str(ROOTPATH / "configs")
 import src.utils as utils
 from src.data.custom_dataset import create_dataloader
 
+# Enable Tensor Core operations
+torch.set_float32_matmul_precision('medium')
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 @hydra.main(config_path=CONFIG_PATH, config_name="config")
 def main(cfg: DictConfig):

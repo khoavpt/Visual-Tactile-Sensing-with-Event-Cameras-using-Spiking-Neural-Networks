@@ -16,6 +16,8 @@ CONFIG_PATH = str(ROOTPATH / "configs")
 
 from src.data.events_encoding import accumulate_dv_encode
 from src.models.convsnn import ConvSNN
+from src.models.convsnnl import ConvSNN_L
+from src.models.spiking_convlstm import SpikingConvLSTM
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -25,19 +27,32 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 capture = None
 model = None
 slicer = None
-mem1 = mem2 = mem3 = mem4 = None
+hidden_states = None
 frame_buffer = None
 idx_to_label = {0: "No press", 1: "Press"}
 frame_queue = Queue(maxsize=1)
 running = True
 source_type = "file"
+no_press_counter = 0
+reset_threshold = 30  # Number of consecutive "No Press" frames before reset
 
 def load_model(model_name):
-    global model, mem1, mem2, mem3, mem4
+    global model, hidden_states
     checkpoint_path = f"{ROOTPATH}/saved_models/{model_name}"
-    model = ConvSNN.load_from_checkpoint(checkpoint_path, beta_init=0.9, in_channels=1, spikegrad="fast_sigmoid", lr=0.01).to(device)
-    mem1, mem2, mem3, mem4 = (model.lif1.init_leaky(), model.lif2.init_leaky(),
-                               model.lif3.init_leaky(), model.lif4.init_leaky())
+
+    model_type = model_name.split('_')[0].lower()
+    if model_type == "convsnn":
+        model = ConvSNN.load_from_checkpoint(checkpoint_path).to(device)
+    elif model_type == "convsnnl":
+        model = ConvSNN_L.load_from_checkpoint(checkpoint_path).to(device)
+    elif model_type == "convslstm":
+        model = SpikingConvLSTM.load_from_checkpoint(checkpoint_path).to(device)
+    else:
+        raise Exception("Invalid model")
+
+    model.eval()
+    hidden_states = model.init_hidden_states()
+
 
 def load_data(data_name=None, source_type="file"):
     global capture, slicer
@@ -72,30 +87,38 @@ def slicing_callback(events: dv.EventStore):
         return
     
     frame = accumulate_dv_encode(events, capture.getEventResolution())
+    frame_vis = cv.resize(frame, (640, 480))
+    _, buffer = cv.imencode('.jpg', frame_vis)
+    socketio.emit('frame', {'image': buffer.tobytes()})
+
     try:
         frame_queue.put_nowait(frame)
     except:
-        frame_queue.get_nowait() # Get old frame out if full
+        frame_queue.get_nowait()
         frame_queue.put_nowait(frame)
 
 def inference_loop():
     """Continuously runs inference on frames from the queue."""
-    global frame_buffer, mem1, mem2, mem3, mem4
+    global frame_buffer, hidden_states, no_press_counter
     while running:
         try:
             frame = frame_queue.get(timeout=0.1)
             
-            with torch.no_grad():
-                frame_input = transform(frame).unsqueeze(0).to(device)
-                output, mem1, mem2, mem3, mem4 = model.process_frame(frame_input, mem1, mem2, mem3, mem4)
-                pred = output.argmax(dim=1).item()
-            
-            frame_vis = cv.resize(frame, (640, 480))
-            cv.putText(frame_vis, f"Prediction: {idx_to_label[pred]}", 
-                      (10, 20), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            _, buffer = cv.imencode('.jpg', frame_vis)
-            socketio.emit('frame', {'image': buffer.tobytes()})
-            
+            frame_input = transform(frame).unsqueeze(0).to(device)
+            output, hidden_states = model.process_frame(frame_input, hidden_states)
+            pred = output.argmax(dim=1).item()
+            socketio.emit('prediction', {'label': idx_to_label[pred]})
+
+            # Reset hidden states after consecutive "No Press" predictions
+            if pred == 0:
+                no_press_counter += 1
+                if no_press_counter >= reset_threshold:
+                    hidden_states = model.init_hidden_states()
+                    no_press_counter = 0
+                    print("Resetting hidden states")
+            else:
+                no_press_counter = 0  # Reset counter if "Press" is detected
+
         except:
             continue
 
