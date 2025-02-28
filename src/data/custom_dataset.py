@@ -5,6 +5,21 @@ from torchvision import transforms
 from sklearn.model_selection import StratifiedKFold
 import numpy as np
 
+
+class FlipTransform():
+    """Randomly flip a WHOLE sequence horizontally or vertically"""
+    def __init__(self, p_horizontal=0.3, p_vertical=0.3):
+        self.p_horizontal = p_horizontal
+        self.p_vertical = p_vertical
+    
+    def __call__(self, sequence):
+        """sequence: (sequence_length, channels, height, width)"""
+        if torch.rand(1).item() < self.p_horizontal:
+            sequence = torch.flip(sequence, dims=[-1])
+        if torch.rand(1).item() < self.p_vertical:
+            sequence = torch.flip(sequence, dims=[-2])
+        return sequence
+
 class CustomSequenceDataset(Dataset):
     def __init__(self, root_dir, transform=None):
         self.root_dir = root_dir
@@ -41,10 +56,7 @@ def create_dataloader(
         batch_size: int,
         num_workers: int = 1
 ):
-    # train_transform = transforms.Compose([
-    #     transforms.RandomHorizontalFlip(p=0.5),
-    #     transforms.RandomVerticalFlip(p=0.5),
-    # ])
+    # train_transform = FlipTransform(p_horizontal=0.2, p_vertical=0.2)
     
     dataset = CustomSequenceDataset(root_dir=data_dir)
    

@@ -69,16 +69,18 @@ def load_data(data_name=None, source_type="file"):
         raise Exception(str(e))
 
 class ClipTransform:
-    def __call__(self, img):
-        return torch.clamp(img, 0, 1)
+    class ClipTransform:
+        def __call__(self, img):
+            return torch.clamp(img, 0, 5)
 
 transform = transforms.Compose([
     transforms.ToPILImage(),
-    transforms.Resize((32, 32)),
+    transforms.Resize(32, 32),  # Resize the images if needed
     transforms.Grayscale(num_output_channels=1),
-    transforms.ToTensor(),
-    ClipTransform(),
-    transforms.Normalize(mean=[0.5], std=[0.01])
+    transforms.ToTensor(),         # Convert images to tensor
+    transforms.Normalize(mean=0.5, std=0.01),  # Normalize
+    ClipTransform(),               # Clip values to be inside [0, 1]
+    # MinMaxTransform()
 ])
 
 def slicing_callback(events: dv.EventStore):
