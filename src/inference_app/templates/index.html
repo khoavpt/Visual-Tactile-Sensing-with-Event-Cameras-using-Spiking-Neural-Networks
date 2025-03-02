@@ -80,6 +80,7 @@
         <img id="video_feed" style="width: 640px; height: 480px;">
         <div class="prediction-display">
             <h2>Current Prediction: <span id="prediction">Waiting...</span></h2>
+            <p>Predictions-per-second: <span id="fps">0</span></p>
         </div>
     </div>
 
@@ -92,6 +93,9 @@
 
         socket.on("prediction", function(data) {
             document.getElementById("prediction").textContent = data.label;
+            if (data.fps !== undefined) {
+                document.getElementById("fps").textContent = data.fps;
+            }
         });
 
         // Add this function to toggle data file selection visibility

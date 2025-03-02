@@ -1,37 +1,47 @@
-import snntorch as snn
-import torch
 import torch.nn as nn
-import math
 
 from .base import BaseSpikingModel
+from ..layers.basic_spiking_block import ConvSpikingBlock, LinearSpikingBlock
 
 class ConvSNN(BaseSpikingModel):
     def __init__(self, beta_init, spikegrad="fast_sigmoid", in_channels=1, lr=0.001):
         super().__init__(beta_init=beta_init, spikegrad=spikegrad, lr=lr)
         self.save_hyperparameters()
 
-        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=6, kernel_size=5)
-        self.bn1 = nn.BatchNorm2d(6, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.lif1 = snn.Leaky(beta=self.beta_init, spike_grad=self.spikegrad, threshold=0.5, learn_beta=True, learn_threshold=True)
-        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (batch_size, 6, 14, 14)
+        # Conv block 1
+        self.conv_block1 = ConvSpikingBlock(
+            in_channels=in_channels, out_channels=6, kernel_size=5, 
+            alpha=1, VTH=0.5,
+            spike_grad=self.spikegrad, beta_init=0.9,
+            pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+        # Conv block 2
+        self.conv_block2 = ConvSpikingBlock(
+            in_channels=6, out_channels=16, kernel_size=5, 
+            alpha=1, VTH=0.5,
+            spike_grad=self.spikegrad, beta_init=0.9,
+            pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
+        )
+        # Linear block 1
+        self.linear_block1 = LinearSpikingBlock(
+            in_features=16 * 5 * 5, out_features=120,
+            alpha=1, VTH=0.5,
+            spike_grad=self.spikegrad, beta_init=0.9,
+        )
 
-        self.conv2 = nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5)
-        self.bn2 = nn.BatchNorm2d(16, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.lif2 = snn.Leaky(beta=self.beta_init, spike_grad=self.spikegrad, threshold=0.5, learn_beta=True, learn_threshold=True)
-        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2) # Output: (batch_size, 16, 5, 5)
+        # Linear block 2
+        self.linear_block2 = LinearSpikingBlock(
+            in_features=120, out_features=2,
+            alpha=1, VTH=0.5,
+            spike_grad=self.spikegrad, beta_init=0.9,
+        )
 
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.bn3 = nn.BatchNorm1d(120, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.lif3 = snn.Leaky(beta=self.beta_init, spike_grad=self.spikegrad, learn_beta=True, learn_threshold=True, threshold=0.5)
-        self.fc2 = nn.Linear(120, 2)
-        self.bn4 = nn.BatchNorm1d(2, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.lif4 = snn.Leaky(beta=self.beta_init, spike_grad=self.spikegrad, learn_beta=True, learn_threshold=True, threshold=0.5)
     
     def init_hidden_states(self):
-        mem1 = self.lif1.init_leaky()
-        mem2 = self.lif2.init_leaky()
-        mem3 = self.lif3.init_leaky()
-        mem4 = self.lif4.init_leaky()
+        mem1 = self.conv_block1.lif.init_leaky()
+        mem2 = self.conv_block2.lif.init_leaky()
+        mem3 = self.linear_block1.lif.init_leaky()
+        mem4 = self.linear_block2.lif.init_leaky()
         return mem1, mem2, mem3, mem4
 
     def process_frame(self, x, hidden_states):
@@ -44,26 +54,13 @@ class ConvSNN(BaseSpikingModel):
         batch_size, channels, height, width = x.size()
         mem1, mem2, mem3, mem4 = hidden_states
 
-        x = self.conv1(x)
-        x = self.bn1(x)
-        spk1, mem1 = self.lif1(x, mem1)
-        x = self.pool1(spk1)
+        x, mem1 = self.conv_block1.process_frame(x, mem1)
+        x, mem2 = self.conv_block2.process_frame(x, mem2) # x: ()
+        x = x.view(batch_size, -1)  # Flatten
+        x, mem3 = self.linear_block1.process_frame(x, mem3)
+        x, mem4 = self.linear_block2.process_frame(x, mem4)
 
-        x = self.conv2(x)
-        x = self.bn2(x)
-        spk2, mem2 = self.lif2(x, mem2)
-        x = self.pool2(spk2)
-
-        x = x.view(batch_size, -1)
-        x = self.fc1(x)
-        x = self.bn3(x)
-        spk3, mem3 = self.lif3(x, mem3)
-
-        x = self.fc2(spk3)
-        x = self.bn4(x)
-        spk4, mem4 = self.lif4(x, mem4)
-
-        return spk4, (mem1, mem2, mem3, mem4)
+        return x, (mem1, mem2, mem3, mem4)
     
     def forward(self, x):
         """
@@ -73,13 +70,22 @@ class ConvSNN(BaseSpikingModel):
             output: (batch_size, sequence_length, num_classes)
         """
         batch_size, sequence_length, channels, height, width = x.size()
-        hidden_states = self.init_hidden_states()
+        mem1, mem2, mem3, mem4 = self.init_hidden_states()
 
-        outputs = []
-        mem4s = []
-        for t in range(sequence_length):
-            frame = x[:, t]  # Extract frame at time t
-            output, hidden_states = self.process_frame(frame, hidden_states)
-            mem4s.append(hidden_states[-1])
-            outputs.append(output)
-        return torch.stack(outputs, dim=1)  # (batch_size, sequence_length, num_classes)
+        x = self.conv_block1(x, mem1)
+        x = self.conv_block2(x, mem2)
+        x = x.view(batch_size, sequence_length, -1)  # Flatten
+        x = self.linear_block1(x, mem3)
+        x = self.linear_block2(x, mem4)
+
+        return x  # Output shape: (batch_size, sequence_length, num_classes)
+    
+    def to_inference_mode(self):
+        """
+        Switch model to inference mode (to eval + fuse bn-scale)
+        """
+        self.eval()
+        self.conv_block1.fuse_weight()
+        self.conv_block2.fuse_weight()
+        self.linear_block1.fuse_weight()
+        self.linear_block2.fuse_weight()

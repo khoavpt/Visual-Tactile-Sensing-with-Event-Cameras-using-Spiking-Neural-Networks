@@ -42,7 +42,7 @@ def main(cfg: DictConfig):
     
     tb_logger = TensorBoardLogger(save_dir=os.path.join(ROOTPATH, "outputs"), name="lightning_logs")
 
-    trainer: pl.Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=[loss_logger], logger=tb_logger)
+    trainer: pl.Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=[loss_logger], logger=tb_logger, log_every_n_steps=5)
 
     # Train model
     trainer.fit(model, train_dataloader, test_dataloader)

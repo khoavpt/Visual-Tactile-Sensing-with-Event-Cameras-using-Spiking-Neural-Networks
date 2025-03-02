@@ -1,0 +1,143 @@
+import torch
+import torch.nn as nn
+import snntorch as snn
+
+from .batchnorm import tdBatchNorm2d, tdBatchNorm1d
+
+class ConvSpikingBlock(nn.Module):
+    """
+    Convolutional Spiking Block: Conv2d -> tdBN2d -> LIF -> Pool
+    """
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=0, 
+                 alpha=1,  VTH=1.0, 
+                 spike_grad=snn.surrogate.fast_sigmoid(), beta_init=0.9, learn_beta=True, learn_threshold=True,
+                 pooling_layer=None):
+        """
+        Args:
+            - Conv args:
+                in_channels: Number of input channels
+                out_channels: Number of output channels
+                kernel_size: Size of the convolving kernel
+                stride: Stride of the convolution
+                padding: Zero-padding added to both sides of the input
+            - tdBN args:
+                alpha: Additional parameter which may change in resblock
+                VTH: Threshold voltage
+            - LIF args:
+                spike_grad: Surrogate gradient for spiking neurons
+                beta_init: Initial value of beta
+                learn_beta: Whether to learn beta
+                learn_threshold: Whether to learn threshold
+            - pooling_layer: Pooling layer to apply after LIF
+        """
+        super().__init__()
+        
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
+        self.bn = tdBatchNorm2d(out_channels, alpha=alpha, VTH=VTH)
+        self.lif = snn.Leaky(beta=beta_init, spike_grad=spike_grad, threshold=VTH, 
+                            learn_beta=learn_beta, learn_threshold=learn_threshold)
+        self.pooling_layer = pooling_layer if pooling_layer else nn.Identity()
+
+    def forward(self, x, mem_init):
+        """x: (batch_size, seq_len, channels, height, width)"""
+        batch_size, sequence_length, channels, height, width = x.size()
+
+        x = x.view(-1, channels, height, width)
+        x = self.conv(x)
+        x = x.view(batch_size, sequence_length, *x.shape[1:])
+        x = self.bn(x)
+
+        spk_list = []
+        mem = mem_init
+        for t in range(sequence_length):
+            spk, mem = self.lif(x[:, t], mem)
+            spk = self.pooling_layer(spk)
+            spk_list.append(spk)
+
+        return torch.stack(spk_list, dim=1)
+
+    def fuse_weight(self):
+        """
+        Batchnorm-scale fusion for inference
+        """
+        with torch.no_grad():
+            fused_weight, fused_bias = self.bn.fuse_weight(self.conv.weight, self.conv.bias)
+            self.conv.weight.data.copy_(fused_weight)
+            self.conv.bias.data.copy_(fused_bias)
+
+    def process_frame(self, x, mem_prev):
+        """
+        Inference: Skip batch norm, use pre-fused weights
+
+        x: (batch_size, channels, height, width)
+        """
+        x = self.conv(x)
+        spk, mem = self.lif(x, mem_prev)
+        x = self.pooling_layer(spk)
+        return x, mem
+    
+class LinearSpikingBlock(nn.Module):
+    """
+    Linear Spiking Block: Linear -> tdBN1d -> LIF
+    """
+    def __init__(self, in_features, out_features, 
+                 alpha=1, VTH=1.0, 
+                 spike_grad=snn.surrogate.fast_sigmoid(), beta_init=0.9, learn_beta=True, learn_threshold=True):
+        """
+        Args:
+            - Linear args:
+                in_features: Size of each input sample
+                out_features: Size of each output sample
+            - tdBN args:
+                alpha: Additional parameter which may change in resblock
+                VTH: Threshold voltage
+            - LIF args:
+                spike_grad: Surrogate gradient for spiking neurons
+                beta_init: Initial value of beta
+                learn_beta: Whether to learn beta
+                learn_threshold: Whether to learn threshold
+        """
+        super().__init__()
+        
+        self.fc = nn.Linear(in_features, out_features)
+        self.bn = tdBatchNorm1d(out_features, alpha=alpha, VTH=VTH)
+        self.lif = snn.Leaky(beta=beta_init, spike_grad=spike_grad, threshold=VTH, 
+                            learn_beta=learn_beta, learn_threshold=learn_threshold)
+        
+        self.fused_fc = nn.Linear(self.fc.in_features, self.fc.out_features)
+
+    def forward(self, x, mem_init):
+        """x: (batch_size, seq_len, in_features)"""
+        batch_size, sequence_length, in_features = x.size()
+
+        x = x.view(-1, in_features)
+
+        x = self.fc(x)
+        x = x.view(batch_size, sequence_length, -1)
+        x = self.bn(x)
+
+        spk_list = []
+        mem = mem_init
+        for t in range(sequence_length):
+            spk, mem = self.lif(x[:, t], mem)
+            spk_list.append(spk)
+
+        return torch.stack(spk_list, dim=1)
+    
+    def fuse_weight(self):
+        """
+        Batchnorm-scale fusion for inference
+        """
+        fused_weight, fused_bias = self.bn.fuse_weight(self.fc.weight, self.fc.bias)
+        self.fused_fc.weight.data.copy_(fused_weight)
+        self.fused_fc.bias.data.copy_(fused_bias)
+
+    def process_frame(self, x, mem_prev):
+        """
+        Inference: Skip batch norm, use pre-fused weights
+
+        x: (batch_size, in_features)
+        """
+        x = self.fused_fc(x)
+        spk, mem = self.lif(x, mem_prev)
+        return spk, mem

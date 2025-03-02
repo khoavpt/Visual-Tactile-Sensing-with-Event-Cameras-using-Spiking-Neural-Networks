@@ -22,23 +22,6 @@ class BaseSpikingModel(pl.LightningModule):
         else:
             raise ValueError(f"Unknown surrogate gradient function: {spikegrad}")
 
-    @abc.abstractmethod
-    def init_hidden_states(self) -> tuple:
-        raise NotImplementedError
-    
-    @abc.abstractmethod
-    def process_frame(self, x, hidden_states) -> tuple:
-        """ 
-        Process a single frame
-        Args:
-            x: (batch_size, channels, height, width)
-            hidden_states: Tuple of hidden states to carry over timesteps
-        Returns:
-            output: (batch_size, num_classes)
-            hidden_states: Tuple of hidden states to carry over timesteps
-        """
-        raise NotImplementedError
-    
     def common_step(self, batch, batch_idx):
         sequence, target = batch  # Sequence: (batch_size, sequence_length, channels, height, width), target: (batch_size, sequence_length)
         output = self(sequence)  # (batch_size, sequence_length, num_classes)
@@ -88,3 +71,27 @@ class BaseSpikingModel(pl.LightningModule):
                 'frequency': 1
             }
         }
+    
+    @abc.abstractmethod
+    def init_hidden_states(self) -> tuple:
+        raise NotImplementedError
+    
+    @abc.abstractmethod
+    def process_frame(self, x, hidden_states) -> tuple:
+        """ 
+        Process a single frame (for inference)
+        Args:
+            x: (batch_size, channels, height, width)
+            hidden_states: Tuple of hidden states to carry over timesteps
+        Returns:
+            output: (batch_size, num_classes)
+            hidden_states: Tuple of hidden states to carry over timesteps
+        """
+        raise NotImplementedError
+    
+    @abc.abstractmethod
+    def to_inference_mode(self):
+        """
+        Switch model to inference mode (to eval + fuse bn-scale)
+        """
+        raise NotImplementedError

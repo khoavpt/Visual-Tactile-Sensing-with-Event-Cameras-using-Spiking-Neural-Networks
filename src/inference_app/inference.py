@@ -10,6 +10,8 @@ import rootutils
 import os
 from threading import Thread
 from queue import Queue
+from collections import deque
+
 
 ROOTPATH = rootutils.setup_root(__file__, indicator=".project_root", pythonpath=True)
 CONFIG_PATH = str(ROOTPATH / "configs")
@@ -36,6 +38,10 @@ source_type = "file"
 no_press_counter = 0
 reset_threshold = 30  # Number of consecutive "No Press" frames before reset
 
+# For Prediction-per-second calculation
+last_fps_time = 0
+fps_counter = 0
+
 def load_model(model_name):
     global model, hidden_states
     checkpoint_path = f"{ROOTPATH}/saved_models/{model_name}"
@@ -50,7 +56,7 @@ def load_model(model_name):
     else:
         raise Exception("Invalid model")
 
-    model.eval()
+    model.to_inference_mode()
     hidden_states = model.init_hidden_states()
 
 
@@ -69,13 +75,12 @@ def load_data(data_name=None, source_type="file"):
         raise Exception(str(e))
 
 class ClipTransform:
-    class ClipTransform:
-        def __call__(self, img):
-            return torch.clamp(img, 0, 5)
+    def __call__(self, img):
+        return torch.clamp(img, 0, 5)
 
 transform = transforms.Compose([
     transforms.ToPILImage(),
-    transforms.Resize(32, 32),  # Resize the images if needed
+    transforms.Resize((32, 32)),  # Resize the images if needed
     transforms.Grayscale(num_output_channels=1),
     transforms.ToTensor(),         # Convert images to tensor
     transforms.Normalize(mean=0.5, std=0.01),  # Normalize
@@ -101,7 +106,7 @@ def slicing_callback(events: dv.EventStore):
 
 def inference_loop():
     """Continuously runs inference on frames from the queue."""
-    global frame_buffer, hidden_states, no_press_counter
+    global frame_buffer, hidden_states, no_press_counter, last_fps_time, fps_counter
     while running:
         try:
             frame = frame_queue.get(timeout=0.1)
@@ -109,7 +114,21 @@ def inference_loop():
             frame_input = transform(frame).unsqueeze(0).to(device)
             output, hidden_states = model.process_frame(frame_input, hidden_states)
             pred = output.argmax(dim=1).item()
-            socketio.emit('prediction', {'label': idx_to_label[pred]})
+            
+            # FPS calculation
+            current_time = time.time()
+            fps_counter += 1
+            
+            if current_time - last_fps_time >= 1.0: 
+                fps = fps_counter
+                socketio.emit('prediction', {
+                    'label': idx_to_label[pred],
+                    'fps': fps
+                })
+                fps_counter = 0
+                last_fps_time = current_time
+            else:
+                socketio.emit('prediction', {'label': idx_to_label[pred]})
 
             # Reset hidden states after consecutive "No Press" predictions
             if pred == 0:
@@ -121,7 +140,7 @@ def inference_loop():
             else:
                 no_press_counter = 0  # Reset counter if "Press" is detected
 
-        except:
+        except Exception as e:
             continue
 
 def event_processing_loop():

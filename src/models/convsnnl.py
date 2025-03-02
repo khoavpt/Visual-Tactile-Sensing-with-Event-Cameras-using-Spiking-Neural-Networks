@@ -25,7 +25,6 @@ class ConvSNN_L(BaseSpikingModel):
 
         self.fc3 = nn.Linear(L * 2, 2)
 
-
     def init_hidden_states(self):
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
