@@ -120,6 +120,33 @@ def preprocess_frames(frames, encoding_type='accumulate', target_size=(32, 32)):
     preprocessed_frames = [transform(frame) for frame in frames] # List of tensors, each of shape (2, H, W)
     return preprocessed_frames
 
+def split_and_create_sequences(frames, labels, sequence_length=300, steps=100, split_ratio=0.7):
+    """
+    Split the frames and labels into train and validation sets and create sequences of frames using the sliding window approach.
+    Args:
+        frames: list of frames
+        labels: list of labels
+        sequence_length: int
+        steps: int, step size for the sliding window
+        split_ratio: float, ratio of the training set
+    Returns:
+        train_sequences: list of sequences of frames for training
+        train_sequences_labels: list of sequences of labels for training
+        val_sequences: list of sequences of frames for validation
+        val_sequences_labels: list of sequences of labels for validation
+    """
+    split_idx = int(len(frames) * split_ratio)
+
+    # Chia train và validation theo thứ tự thời gian
+    train_frames, val_frames = frames[:split_idx], frames[split_idx:]
+    train_labels, val_labels = labels[:split_idx], labels[split_idx:]
+
+    # Áp dụng sliding window
+    train_sequences, train_sequences_labels = create_sequence(train_frames, train_labels, sequence_length, steps)
+    val_sequences, val_sequences_labels = create_sequence(val_frames, val_labels, sequence_length, steps)
+
+    return train_sequences, train_sequences_labels, val_sequences, val_sequences_labels
+
 def create_sequence(frames, labels, sequence_length=300, steps=100):
     """
     Split a list of frames into sequences of a fixed length using the sliding window approach, each with their corresponding labels.
@@ -170,12 +197,58 @@ def aedat4_to_sequences(
                 encoding_type=encoding_type
             )
             frames = preprocess_frames(frames, encoding_type=encoding_type) # add transformations
-            sequences, sequence_labels = create_sequence(frames, labels, sequence_length=sequence_length, steps=steps)
+
+            train_sequences, train_sequences_labels, val_sequences, val_sequences_labels = split_and_create_sequences(frames, labels, sequence_length=sequence_length, steps=steps, split_ratio=0.7)
             
-            os.makedirs(output_dir, exist_ok=True)
-            for i, (sequence, sequence_label) in enumerate(zip(sequences, sequence_labels)):
+            train_dir = os.path.join(output_dir, 'train')
+            val_dir = os.path.join(output_dir, 'val')
+            os.makedirs(train_dir, exist_ok=True)
+            os.makedirs(val_dir, exist_ok=True)
+
+            for i, (sequence, sequence_label) in enumerate(zip(train_sequences, train_sequences_labels)):
                 sequence_data = {
                     'sequence': torch.stack(sequence),
                     'label': torch.tensor(sequence_label)
                 }
-                torch.save(sequence_data, os.path.join(output_dir, f"{file_prefix}_seq_{i}.pt"))
+                torch.save(sequence_data, os.path.join(train_dir, f"{file_prefix}_seq_{i}.pt"))
+            for i, (sequence, sequence_label) in enumerate(zip(val_sequences, val_sequences_labels)):
+                sequence_data = {
+                    'sequence': torch.stack(sequence),
+                    'label': torch.tensor(sequence_label)
+                }
+                torch.save(sequence_data, os.path.join(val_dir, f"{file_prefix}_seq_{i}.pt"))
+
+
+# import numpy as np
+
+# def main():
+#     # Giả lập dữ liệu video với 1000 frames và nhãn ngẫu nhiên (0 hoặc 1)
+#     total_frames = 1000
+#     frames = list(range(total_frames))  # Giả lập frames là các số nguyên liên tiếp
+#     labels = np.random.choice([0, 1], size=total_frames, p=[0.9, 0.1])  # 90% là 0, 10% là 1
+
+#     # Gọi hàm chia dữ liệu và tạo sequences
+#     train_seq, train_seq_labels, val_seq, val_seq_labels = split_and_create_sequences(frames, labels)
+
+#     # In thông tin kết quả
+#     print(f"Tổng số frame: {total_frames}")
+#     print(f"Số sequences train: {len(train_seq)}")
+#     print(f"Số sequences val: {len(val_seq)}")
+
+#     # In toàn bộ train sequences
+#     print("\n=== Train Sequences ===")
+#     for i, (seq, lbl) in enumerate(zip(train_seq, train_seq_labels)):
+#         print(f"Train Sample {i+1}:")
+#         print(f"Frames: {seq}")
+#         print(f"Labels: {lbl}\n")
+
+#     # In toàn bộ val sequences
+#     print("\n=== Validation Sequences ===")
+#     for i, (seq, lbl) in enumerate(zip(val_seq, val_seq_labels)):
+#         print(f"Val Sample {i+1}:")
+#         print(f"Frames: {seq}")
+#         print(f"Labels: {lbl}\n")
+
+# if __name__ == "__main__":
+#     main()
+
