@@ -57,44 +57,44 @@ class LossLogger(pl.Callback):
         if val_recall is not None:
             self.val_recalls.append(val_recall.item())
 
-def plot_results(self, save_path=None):
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    def plot_results(self, save_path=None):
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    # Loss
-    axes[0, 0].plot(self.train_losses, label='Train Loss')
-    axes[0, 0].plot(self.val_losses, label='Validation Loss')
-    axes[0, 0].set_xlabel('Epoch')
-    axes[0, 0].set_ylabel('Loss')
-    axes[0, 0].legend()
-    axes[0, 0].set_title('Training and Validation Loss')
+        # Loss
+        axes[0, 0].plot(self.train_losses, label='Train Loss')
+        axes[0, 0].plot(self.val_losses, label='Validation Loss')
+        axes[0, 0].set_xlabel('Epoch')
+        axes[0, 0].set_ylabel('Loss')
+        axes[0, 0].legend()
+        axes[0, 0].set_title('Training and Validation Loss')
 
-    # Accuracy
-    axes[0, 1].plot(self.train_accuracies, label='Train Accuracy')
-    axes[0, 1].plot(self.val_accuracies, label='Validation Accuracy')
-    axes[0, 1].set_xlabel('Epoch')
-    axes[0, 1].set_ylabel('Accuracy')
-    axes[0, 1].legend()
-    axes[0, 1].set_title('Training and Validation Accuracy')
+        # Accuracy
+        axes[0, 1].plot(self.train_accuracies, label='Train Accuracy')
+        axes[0, 1].plot(self.val_accuracies, label='Validation Accuracy')
+        axes[0, 1].set_xlabel('Epoch')
+        axes[0, 1].set_ylabel('Accuracy')
+        axes[0, 1].legend()
+        axes[0, 1].set_title('Training and Validation Accuracy')
 
-    # Precision
-    axes[1, 0].plot(self.train_precisions, label='Train Precision')
-    axes[1, 0].plot(self.val_precisions, label='Validation Precision')
-    axes[1, 0].set_xlabel('Epoch')
-    axes[1, 0].set_ylabel('Precision')
-    axes[1, 0].legend()
-    axes[1, 0].set_title('Training and Validation Precision')
+        # Precision
+        axes[1, 0].plot(self.train_precisions, label='Train Precision')
+        axes[1, 0].plot(self.val_precisions, label='Validation Precision')
+        axes[1, 0].set_xlabel('Epoch')
+        axes[1, 0].set_ylabel('Precision')
+        axes[1, 0].legend()
+        axes[1, 0].set_title('Training and Validation Precision')
 
-    # Recall
-    axes[1, 1].plot(self.train_recalls, label='Train Recall')
-    axes[1, 1].plot(self.val_recalls, label='Validation Recall')
-    axes[1, 1].set_xlabel('Epoch')
-    axes[1, 1].set_ylabel('Recall')
-    axes[1, 1].legend()
-    axes[1, 1].set_title('Training and Validation Recall')
+        # Recall
+        axes[1, 1].plot(self.train_recalls, label='Train Recall')
+        axes[1, 1].plot(self.val_recalls, label='Validation Recall')
+        axes[1, 1].set_xlabel('Epoch')
+        axes[1, 1].set_ylabel('Recall')
+        axes[1, 1].legend()
+        axes[1, 1].set_title('Training and Validation Recall')
 
-    plt.suptitle(f'Training and Validation Metrics of the {self.model_name} model')
+        plt.suptitle(f'Training and Validation Metrics of the {self.model_name} model')
 
-    if save_path:
-        plt.savefig(save_path)
-    else:
-        plt.show()
+        if save_path:
+            plt.savefig(save_path)
+        else:
+            plt.show()
