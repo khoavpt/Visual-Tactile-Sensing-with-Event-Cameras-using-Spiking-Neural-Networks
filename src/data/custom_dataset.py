@@ -57,32 +57,29 @@ def create_dataloader(
         num_workers: int = 1
 ):
     # train_transform = FlipTransform(p_horizontal=0.2, p_vertical=0.2)
-    
-    dataset = CustomSequenceDataset(root_dir=data_dir)
-   
-    # Extract labels for stratification
-    labels = [torch.load(path)['label'] for path in dataset.samples]
-    labels = np.array([torch.sum(label).item() for label in labels])  # Sum of press events in each label
+    train_dir = os.path.join(data_dir, 'train')
+    test_dir = os.path.join(data_dir, 'val')
 
-    # Stratified split
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    train_idx, test_idx = next(skf.split(np.zeros(len(labels)), labels))
-
-    train_dataset = Subset(dataset, train_idx)
-    test_dataset = Subset(dataset, test_idx)
-
-    # train_dataset.dataset.transform = train_transform
+    train_dataset = CustomSequenceDataset(root_dir=train_dir)
+    test_dataset = CustomSequenceDataset(root_dir=test_dir)
 
     train_dataloader = DataLoader(dataset=train_dataset,
                                   batch_size=batch_size,
                                   shuffle=True,
-                                  num_workers=num_workers)
+                                  num_workers=num_workers,
+                                  pin_memory=True,
+                                  persistent_workers=True,
+                                  prefetch_factor=2)
+    
     test_dataloader = DataLoader(dataset=test_dataset,
                                  batch_size=batch_size,
                                  shuffle=False,
-                                 num_workers=num_workers)
-
-    print(f"Total number of sequences: {len(dataset)}")
+                                 num_workers=num_workers,
+                                 pin_memory=True,
+                                 persistent_workers=True,
+                                 prefetch_factor=2)
+    
+    print(f"Total number of sequences: {len(train_dataset) + len(test_dataset)}")
     print(f"Number of training sequences: {len(train_dataset)}")
     print(f"Number of test sequences: {len(test_dataset)}")
 
@@ -94,12 +91,16 @@ def create_dataloader(
             press_count += labels.sum().item()
             nopress_count += (labels.size(0) * labels.size(1)) - labels.sum().item()
         return press_count, nopress_count
+    
+    press_train, nopress_train = count_press_nopress(train_dataloader)
+    press_test, nopress_test = count_press_nopress(test_dataloader)
 
-    train_press, train_nopress = count_press_nopress(train_dataloader)
-    test_press, test_nopress = count_press_nopress(test_dataloader)
+    print(f"Number of press events in training set: {press_train}")
+    print(f"Number of no press events in training set: {nopress_train}")
 
-    print(f"Training set - Press: {train_press}, No Press: {train_nopress}")
-    print(f"Test set - Press: {test_press}, No Press: {test_nopress}")
+    print(f"Number of press events in test set: {press_test}")
+    print(f"Number of no press events in test set: {nopress_test}")
+
 
     print("Training DataLoader:")
     for images, labels in train_dataloader:
@@ -114,3 +115,26 @@ def create_dataloader(
     print(f"Number of training batches: {len(train_dataloader)}")
     print(f"Number of test batches: {len(test_dataloader)}")
     return train_dataloader, test_dataloader
+
+def main():
+    data_dir = r"data\seq_data_acc"
+    
+    batch_size = 32
+    num_workers = 4
+
+    train_dataloader, test_dataloader = create_dataloader(
+        data_dir=data_dir,
+        batch_size=batch_size,
+        num_workers=num_workers,
+    )
+    # Example usage of the dataloaders
+    for images, labels in train_dataloader:
+        print(images.shape, labels.shape)
+        break
+
+    for images, labels in test_dataloader:  
+        print(images.shape, labels.shape)
+        break
+
+if __name__ == "__main__":
+    main()

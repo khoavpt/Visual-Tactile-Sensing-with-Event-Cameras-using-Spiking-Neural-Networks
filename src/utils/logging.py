@@ -10,6 +10,10 @@ class LossLogger(pl.Callback):
         self.val_accuracies = []
         self.train_f1s = []
         self.val_f1s = []
+        self.train_precisions = []
+        self.val_precisions = []
+        self.train_recalls = []
+        self.val_recalls = []
         self.epoch_durations = []
         self.model_name = model_name
     
@@ -23,40 +27,73 @@ class LossLogger(pl.Callback):
         train_loss = trainer.callback_metrics.get('train_loss')
         train_accuracy = trainer.callback_metrics.get('train_accuracy')
         train_f1 = trainer.callback_metrics.get('train_f1')
+        train_precision = trainer.callback_metrics.get('train_precision')
+        train_recall = trainer.callback_metrics.get('train_recall')
         if train_loss is not None:
             self.train_losses.append(train_loss.item())
         if train_accuracy is not None:
             self.train_accuracies.append(train_accuracy.item())
         if train_f1 is not None:
             self.train_f1s.append(train_f1.item())
+        if train_precision is not None:
+            self.train_precisions.append(train_precision.item())
+        if train_recall is not None:
+            self.train_recalls.append(train_recall.item())
 
     def on_validation_epoch_end(self, trainer, pl_module):
         val_loss = trainer.callback_metrics.get('val_loss')
         val_accuracy = trainer.callback_metrics.get('val_accuracy')
         val_f1 = trainer.callback_metrics.get('val_f1')
+        val_precision = trainer.callback_metrics.get('val_precision')
+        val_recall = trainer.callback_metrics.get('val_recall')
         if val_loss is not None:
             self.val_losses.append(val_loss.item())
         if val_accuracy is not None:
             self.val_accuracies.append(val_accuracy.item())
         if val_f1 is not None:
             self.val_f1s.append(val_f1.item())
+        if val_precision is not None:
+            self.val_precisions.append(val_precision.item())
+        if val_recall is not None:
+            self.val_recalls.append(val_recall.item())
 
     def plot_results(self, save_path=None):
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-        ax1.plot(self.train_losses, label='Train Loss')
-        ax1.plot(self.val_losses, label='Validation Loss')
-        ax1.set_xlabel('Epoch')
-        ax1.set_ylabel('Loss')
+        # Loss
+        axes[0, 0].plot(self.train_losses, label='Train Loss')
+        axes[0, 0].plot(self.val_losses, label='Validation Loss')
+        axes[0, 0].set_xlabel('Epoch')
+        axes[0, 0].set_ylabel('Loss')
+        axes[0, 0].legend()
+        axes[0, 0].set_title('Training and Validation Loss')
 
-        ax2.plot(self.train_accuracies, label='Train Accuracy')
-        ax2.plot(self.val_accuracies, label='Validation Accuracy')
-        ax2.set_xlabel('Epoch')
-        ax2.set_ylabel('Accuracy')
+        # Accuracy
+        axes[0, 1].plot(self.train_accuracies, label='Train Accuracy')
+        axes[0, 1].plot(self.val_accuracies, label='Validation Accuracy')
+        axes[0, 1].set_xlabel('Epoch')
+        axes[0, 1].set_ylabel('Accuracy')
+        axes[0, 1].legend()
+        axes[0, 1].set_title('Training and Validation Accuracy')
 
-        plt.legend()
-        plt.suptitle(f'Training and Validation Loss, Accuracy of the {self.model_name} model')
-        
+        # Precision
+        axes[1, 0].plot(self.train_precisions, label='Train Precision')
+        axes[1, 0].plot(self.val_precisions, label='Validation Precision')
+        axes[1, 0].set_xlabel('Epoch')
+        axes[1, 0].set_ylabel('Precision')
+        axes[1, 0].legend()
+        axes[1, 0].set_title('Training and Validation Precision')
+
+        # Recall
+        axes[1, 1].plot(self.train_recalls, label='Train Recall')
+        axes[1, 1].plot(self.val_recalls, label='Validation Recall')
+        axes[1, 1].set_xlabel('Epoch')
+        axes[1, 1].set_ylabel('Recall')
+        axes[1, 1].legend()
+        axes[1, 1].set_title('Training and Validation Recall')
+
+        plt.suptitle(f'Training and Validation Metrics of the {self.model_name} model')
+
         if save_path:
             plt.savefig(save_path)
         else:

@@ -42,23 +42,31 @@ class BaseSpikingModel(pl.LightningModule):
         # Calculate F1 score
         f1 = F.f1_score(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
 
-        return loss, accuracy, f1
+        # Calculate precision and recall
+        precision = F.precision(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+        recall = F.recall(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+
+        return loss, accuracy, f1, precision, recall
 
     def training_step(self, batch, batch_idx):
-        loss, accuracy, f1 = self.common_step(batch, batch_idx)
+        loss, accuracy, f1, precision, recall = self.common_step(batch, batch_idx)
 
         self.log('train_loss', loss, on_epoch=True, prog_bar=True, logger=True)
         self.log('train_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
         self.log('train_f1', f1, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_precision', precision, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_recall', recall, on_epoch=True, prog_bar=True, logger=True)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, accuracy, f1 = self.common_step(batch, batch_idx)
+        loss, accuracy, f1, precision, recall = self.common_step(batch, batch_idx)
 
         self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_f1', f1, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_precision', precision, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_recall', recall, on_epoch=True, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
