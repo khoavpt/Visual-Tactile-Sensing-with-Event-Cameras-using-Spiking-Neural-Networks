@@ -67,6 +67,32 @@ class BaseSpikingModel(pl.LightningModule):
         self.log('val_precision', precision, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_recall', recall, on_epoch=True, prog_bar=True, logger=True)
 
+    def test_step(self, batch, batch_idx):
+        sequence, target = batch  # Sequence: (batch_size, sequence_length, channels, height, width), target: (batch_size, sequence_length)
+        hidden_states = self.init_hidden_states()
+
+        predictions = []
+        for t in range(sequence.size(1)):
+            output, hidden_states = self.process_frame(sequence[:, t], hidden_states)
+            predictions.append(output.argmax(dim=1))  # (batch_size, num_classes)
+
+        predictions = torch.stack(predictions, dim=1)  # (batch_size, sequence_length, num_classes)
+
+        # Calculate accuracy
+        correct = (predictions == target).sum()
+        total = target.numel()
+        accuracy = correct / total
+
+        # Calculate f1 score
+        f1 = F.f1_score(predictions.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+        precision = F.precision(predictions.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+        recall = F.recall(predictions.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+
+        self.log('test_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_f1', f1, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_precision', precision, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_recall', recall, on_epoch=True, prog_bar=True, logger=True)
+
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
         scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)

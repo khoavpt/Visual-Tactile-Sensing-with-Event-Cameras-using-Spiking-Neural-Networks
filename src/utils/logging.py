@@ -16,6 +16,11 @@ class LossLogger(pl.Callback):
         self.val_recalls = []
         self.epoch_durations = []
         self.model_name = model_name
+
+        self.test_accuracy = None
+        self.test_f1 = None
+        self.test_precision = None
+        self.test_recall = None
     
     def on_train_epoch_start(self, trainer, pl_module):
         self.epoch_start_time = time.time()
@@ -56,6 +61,22 @@ class LossLogger(pl.Callback):
             self.val_precisions.append(val_precision.item())
         if val_recall is not None:
             self.val_recalls.append(val_recall.item())
+
+    def on_test_end(self, trainer, pl_module):
+        metrics = trainer.callback_metrics
+        test_accuracy = metrics.get('test_accuracy')
+        test_f1 = metrics.get('test_f1')
+        test_precision = metrics.get('test_precision')
+        test_recall = metrics.get('test_recall')
+        if test_accuracy is not None:
+            self.test_accuracy = test_accuracy.item()
+        if test_f1 is not None:
+            self.test_f1 = test_f1.item()
+        if test_precision is not None:
+            self.test_precision = test_precision.item()
+        if test_recall is not None:
+            self.test_recall = test_recall.item()
+
 
     def plot_results(self, save_path=None):
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
