@@ -69,13 +69,13 @@ class LossLogger(pl.Callback):
         test_precision = trainer.callback_metrics.get('test_precision')
         test_recall = trainer.callback_metrics.get('test_recall')
         if test_accuracy is not None:
-            self.test.append(test_accuracy.item())
+            self.test_accuracies.append(test_accuracy.item())
         if test_f1 is not None:
             self.test_f1s.append(test_f1.item())
         if test_precision is not None:
-            self.test.append(test_precision.item())
+            self.test_precisions.append(test_precision.item())
         if test_recall is not None:
-            self.test.append(test_recall.item())
+            self.test_recalls.append(test_recall.item())
 
 
     def plot_results(self, save_path=None):
