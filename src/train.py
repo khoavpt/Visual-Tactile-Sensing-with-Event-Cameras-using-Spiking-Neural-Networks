@@ -45,7 +45,10 @@ def main(cfg: DictConfig):
     trainer: pl.Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=[loss_logger], logger=tb_logger, log_every_n_steps=5)
 
     # Train model
-    trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=test_dataloader, test_dataloaders=test_dataloader)
+    trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=test_dataloader)  # Bỏ test_dataloaders ở đây
+
+    # Test model sau khi train
+    trainer.test(model, dataloaders=test_dataloader)
 
     # Log model configs and results
     loss_logger.plot_results(save_path=os.path.join(ROOTPATH, "figures", f"{cfg.model._target_}_results.png"))
@@ -60,10 +63,10 @@ def main(cfg: DictConfig):
     logger.info(f"Validation accuracies: {loss_logger.val_accuracies}")
     logger.info(f"Validation F1 scores: {loss_logger.val_f1s}")
     logger.info(f"Epoch durations: {loss_logger.epoch_durations}")
-    logger.info(f"Test accuracy: {loss_logger.test_accuracy}")
-    logger.info(f"Test F1 score: {loss_logger.test_f1}")
-    logger.info(f"Test precision: {loss_logger.test_precision}")
-    logger.info(f"Test recall: {loss_logger.test_recall}")
+    logger.info(f"Test accuracy: {loss_logger.test_accuracies[-1]}")
+    logger.info(f"Test F1 score: {loss_logger.test_f1s[-1]}")
+    logger.info(f"Test precision: {loss_logger.test_precisions}")
+    logger.info(f"Test recall: {loss_logger.test_recalls[-1]}")
 
     return
 

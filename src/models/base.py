@@ -73,25 +73,29 @@ class BaseSpikingModel(pl.LightningModule):
 
         predictions = []
         for t in range(sequence.size(1)):
-            output, hidden_states = self.process_frame(sequence[:, t], hidden_states)
-            predictions.append(output.argmax(dim=1))  # (batch_size, num_classes)
+            output, hidden_states = self.process_frame(sequence[:, t], hidden_states) 
+            predictions.append(output.argmax(dim=1))  
 
-        predictions = torch.stack(predictions, dim=1)  # (batch_size, sequence_length, num_classes)
+        predictions = torch.stack(predictions, dim=1)  # (batch_size, sequence_length)
 
-        # Calculate accuracy
+        # Calculate accuracy for this batch
         correct = (predictions == target).sum()
         total = target.numel()
         accuracy = correct / total
 
-        # Calculate f1 score
+        # Calculate F1 score for this batch
         f1 = F.f1_score(predictions.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
         precision = F.precision(predictions.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
         recall = F.recall(predictions.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
 
-        self.log('test_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
-        self.log('test_f1', f1, on_epoch=True, prog_bar=True, logger=True)
+        # Store these metrics for later calculation
+        self.log('test', accuracy, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test', f1, on_epoch=True, prog_bar=True, logger=True)
         self.log('test_precision', precision, on_epoch=True, prog_bar=True, logger=True)
         self.log('test_recall', recall, on_epoch=True, prog_bar=True, logger=True)
+
+        return {'accuracy': accuracy, 'f1': f1, 'precision': precision, 'recall': recall}
+
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
@@ -129,3 +133,5 @@ class BaseSpikingModel(pl.LightningModule):
         Switch model to inference mode (to eval + fuse bn-scale)
         """
         raise NotImplementedError
+    
+
