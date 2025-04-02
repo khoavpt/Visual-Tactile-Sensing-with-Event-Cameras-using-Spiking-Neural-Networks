@@ -92,16 +92,17 @@ class SpikingConvLSTM_CBAM(BaseSpikingModel):
 
         outputs = []
         for t in range(sequence_length):
-            # spk4, syn4, mem4 = self.slstm(x[:, t], syn4, mem4)
-            # out = self.linear_block2(spk4.unsqueeze(1), mem5)
-            # outputs.append(out[:, 0])  # 
-            spk4, syn4, mem4 = self.sconv2dlstm(x[:, t], syn4, mem4) # spk3: (batch_size, 12, 4, 4)
-            out = spk4.view(batch_size, 1, -1) # (batch_size, 1, 6*5*5)
-            out = self.linear_block1(out, mem5) # x: (batch_size, 1, 2)
-            outputs.append(out[:, 0]) # (batch_size, 2)
+            spk4, syn4, mem4 = self.sconv2dlstm(x[:, t], syn4, mem4)  # spk4: (batch_size, 12, 4, 4)
+            out = spk4.view(batch_size, 1, -1)  # (batch_size, 1, 6*5*5)
+            outputs.append(out)  
 
-        return torch.stack(outputs, dim=1)
-    
+        outputs = torch.cat(outputs, dim=1)  # (batch_size, seq_len, 6*5*5)
+
+        outputs = self.linear_block1(outputs, mem5)  # (batch_size, seq_len, 2)
+
+        return outputs
+
+
     def to_inference_mode(self):
         """
         Switch model to inference mode (eval + fuse bn-scale)
@@ -110,7 +111,6 @@ class SpikingConvLSTM_CBAM(BaseSpikingModel):
         self.conv_block1.fuse_weight()
         self.conv_block2.fuse_weight()
         self.linear_block1.fuse_weight()
-        self.linear_block2.fuse_weight()
     
     # def _init_parameters(self):
     #     """
