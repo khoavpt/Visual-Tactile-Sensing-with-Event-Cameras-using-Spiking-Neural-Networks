@@ -68,6 +68,8 @@ class BaseSpikingModel(pl.LightningModule):
         self.log('val_recall', recall, on_epoch=True, prog_bar=True, logger=True)
 
     def test_step(self, batch, batch_idx):
+        self.to_inference_mode()  # Switch to inference mode
+
         sequence, target = batch  # Sequence: (batch_size, sequence_length, channels, height, width), target: (batch_size, sequence_length)
         hidden_states = self.init_hidden_states()
 
@@ -93,9 +95,6 @@ class BaseSpikingModel(pl.LightningModule):
         self.log('test', f1, on_epoch=True, prog_bar=True, logger=True)
         self.log('test_precision', precision, on_epoch=True, prog_bar=True, logger=True)
         self.log('test_recall', recall, on_epoch=True, prog_bar=True, logger=True)
-
-        return {'accuracy': accuracy, 'f1': f1, 'precision': precision, 'recall': recall}
-
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
