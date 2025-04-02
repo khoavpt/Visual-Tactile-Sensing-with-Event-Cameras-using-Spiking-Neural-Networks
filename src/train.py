@@ -5,7 +5,8 @@ import hydra
 from omegaconf import DictConfig
 import logging
 import os
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import WandbLogger
+import wandb
 
 ROOTPATH = rootutils.setup_root(__file__, indicator=".project_root", pythonpath=True)
 CONFIG_PATH = str(ROOTPATH / "configs")
@@ -38,11 +39,23 @@ def main(cfg: DictConfig):
     )
 
     model: pl.LightningModule = hydra.utils.instantiate(cfg.model)
-    loss_logger = utils.logging.LossLogger(model_name=cfg.model._target_)
-    
-    tb_logger = TensorBoardLogger(save_dir=os.path.join(ROOTPATH, "outputs"), name="lightning_logs")
+    loss_logger = utils.logging.LossLogger(model_name=model.__class__.__name__)
 
-    trainer: pl.Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=[loss_logger], logger=tb_logger, log_every_n_steps=5)
+    # Initialize wandb
+    wandb_logger = WandbLogger(
+        project="visual-tactile-snn",
+        name=f"{cfg.model._target_}",
+        log_model=True,
+        config=dict(cfg),
+    )
+
+    trainer: pl.Trainer = hydra.utils.instantiate(
+        cfg.trainer, 
+        callbacks=[loss_logger], 
+        logger=wandb_logger, 
+        devices=[0],
+        precision="16-mixed",
+    )
 
     # Train model
     trainer.fit(model, train_dataloader, test_dataloader)
@@ -60,6 +73,13 @@ def main(cfg: DictConfig):
     logger.info(f"Validation accuracies: {loss_logger.val_accuracies}")
     logger.info(f"Validation F1 scores: {loss_logger.val_f1s}")
     logger.info(f"Epoch durations: {loss_logger.epoch_durations}")
+
+
+    # Test the model
+    model.to_inference_mode()
+    trainer.test(model, dataloaders=test_dataloader)
+
+    wandb.finish()
 
     return
 

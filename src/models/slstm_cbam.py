@@ -6,7 +6,7 @@ from ..layers.basic_spiking_block import ConvSpikingBlock, LinearSpikingBlock, S
 from ..layers.sconv2dlstm import SConv2dLSTM_CBAM
 # from snntorch import SConv2dLSTM
 
-class SpikingConvLSTM2D(BaseSpikingModel):
+class SpikingConvLSTM_CBAM(BaseSpikingModel):
     def __init__(self, beta_init, spikegrad="fast_sigmoid", in_channels=1, lr=0.001):
         super().__init__(beta_init=beta_init, spikegrad=spikegrad, lr=lr)
         self.save_hyperparameters()
@@ -65,14 +65,16 @@ class SpikingConvLSTM2D(BaseSpikingModel):
             hidden_states: Tuple of hidden states
         """
         batch_size = x.size(0)
-        mem1, mem2, mem3, syn3, mem4 = hidden_states
+        mem1, mem2, mem3, syn4, mem4, mem5 = hidden_states
 
         x, mem1 = self.conv_block1.process_frame(x, mem1)
         x, mem2 = self.conv_block2.process_frame(x, mem2)
-        spk3, syn3, mem3 = self.sconv2dlstm(x, syn3, mem3)
-        x, mem4 = self.linear_block1.process_frame(spk3, mem4)
+        x, mem3 = self.conv_block3.process_frame(x, mem3)
 
-        return x, (mem1, mem2, mem3, syn3, mem4)
+        spk4, syn4, mem4 = self.sconv2dlstm(x, syn4, mem4)
+        x, mem5 = self.linear_block1.process_frame(spk4, mem5)
+
+        return x, (mem1, mem2, mem3, syn4, mem4, mem5)
 
     def forward(self, x):
         """

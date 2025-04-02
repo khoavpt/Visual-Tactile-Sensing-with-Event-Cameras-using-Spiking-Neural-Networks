@@ -1,4 +1,4 @@
-_target_: src.models.spiking_convlstm2d.SpikingConvLSTM2D
+_target_: src.models.slstm_cbam.SpikingConvLSTM_CBAM
 beta_init: 0.9
 spikegrad: fast_sigmoid
 in_channels: 1

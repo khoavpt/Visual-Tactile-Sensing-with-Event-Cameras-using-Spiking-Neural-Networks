@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torchmetrics.functional as F
+import wandb
 
 class BaseSpikingModel(pl.LightningModule):
     def __init__(self, beta_init, spikegrad="fast_sigmoid", lr=0.001):
@@ -47,26 +48,32 @@ class BaseSpikingModel(pl.LightningModule):
         recall = F.recall(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
 
         return loss, accuracy, f1, precision, recall
-
+    
     def training_step(self, batch, batch_idx):
         loss, accuracy, f1, precision, recall = self.common_step(batch, batch_idx)
-
-        self.log('train_loss', loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_f1', f1, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_precision', precision, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_recall', recall, on_epoch=True, prog_bar=True, logger=True)
-
+        
+        metrics = {
+            'loss/train': loss,
+            'accuracy/train': accuracy,
+            'f1/train': f1,
+            'precision/train': precision,
+            'recall/train': recall
+        }
+        self.log_dict(metrics, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        
         return loss
 
     def validation_step(self, batch, batch_idx):
         loss, accuracy, f1, precision, recall = self.common_step(batch, batch_idx)
-
-        self.log('val_loss', loss, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_f1', f1, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_precision', precision, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_recall', recall, on_epoch=True, prog_bar=True, logger=True)
+        
+        metrics = {
+            'loss/val': loss,
+            'accuracy/val': accuracy, 
+            'f1/val': f1,
+            'precision/val': precision,
+            'recall/val': recall
+        }
+        self.log_dict(metrics, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
@@ -75,12 +82,55 @@ class BaseSpikingModel(pl.LightningModule):
             'optimizer': optimizer,
             'lr_scheduler': {
                 'scheduler': scheduler,
-                'monitor': 'val_loss',
+                'monitor': 'loss/val',
                 'interval': 'epoch',
                 'frequency': 1
             }
         }
     
+    def test_step(self, batch, batch_idx):
+        sequence, target = batch  
+        batch_size, sequence_length = sequence.shape[0], sequence.shape[1]
+        
+        hidden_states = self.init_hidden_states()
+        outputs = []
+        
+        for t in range(sequence_length):
+            x = sequence[:, t]
+            output, hidden_states = self.process_frame(x, hidden_states)
+            outputs.append(output)
+        
+        outputs = torch.stack(outputs, dim=1) 
+        
+        preds = outputs.argmax(dim=-1)
+        accuracy = (preds == target).float().mean()
+        f1 = F.f1_score(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+        precision = F.precision(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+        recall = F.recall(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+        
+        metrics = {
+            'accuracy/test': accuracy,
+            'f1/test': f1,
+            'precision/test': precision,
+            'recall/test': recall
+        }
+        self.log_dict(metrics, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+        return metrics
+
+    
+    def on_test_epoch_end(self):
+        # Fetch logged test metrics from trainer
+        avg_metrics = {
+            'test_accuracy': self.trainer.callback_metrics['loss/test'],
+            'test_f1': self.trainer.callback_metrics['f1/test'],
+            'test_precision': self.trainer.callback_metrics['precision/test'],
+            'test_recall': self.trainer.callback_metrics['recall/test']
+        }
+        
+        # Log final test metrics
+        self.log_dict(avg_metrics)
+
     @abc.abstractmethod
     def init_hidden_states(self) -> tuple:
         raise NotImplementedError
