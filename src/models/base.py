@@ -91,8 +91,8 @@ class BaseSpikingModel(pl.LightningModule):
         recall = F.recall(predictions.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
 
         # Store these metrics for later calculation
-        self.log('test', accuracy, on_epoch=True, prog_bar=True, logger=True)
-        self.log('test', f1, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_accuracy', accuracy, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_f1', f1, on_epoch=True, prog_bar=True, logger=True)
         self.log('test_precision', precision, on_epoch=True, prog_bar=True, logger=True)
         self.log('test_recall', recall, on_epoch=True, prog_bar=True, logger=True)
 
