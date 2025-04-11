@@ -6,7 +6,6 @@ import pytorch_lightning as pl
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torchmetrics.functional as F
-import wandb
 
 class BaseSpikingModel(pl.LightningModule):
     def __init__(self, beta_init, spikegrad="fast_sigmoid", lr=0.001):
@@ -100,11 +99,18 @@ class BaseSpikingModel(pl.LightningModule):
             output, hidden_states = self.process_frame(x, hidden_states)
             outputs.append(output)
         
-        outputs = torch.stack(outputs, dim=1) 
+        outputs = torch.stack(outputs, dim=1)  # (batch_size, sequence_length, num_classes)
         
-        preds = outputs.argmax(dim=-1)
-        accuracy = (preds == target).float().mean()
+        # Calculate accuracy
+        preds = outputs.argmax(dim=-1)  # (batch_size, sequence_length)
+        correct = (preds == target).sum()
+        total = target.numel()
+        accuracy = correct / total
+
+        # Calculate F1 score
         f1 = F.f1_score(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
+
+        # Calculate precision and recall
         precision = F.precision(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
         recall = F.recall(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
         
@@ -122,7 +128,7 @@ class BaseSpikingModel(pl.LightningModule):
     def on_test_epoch_end(self):
         # Fetch logged test metrics from trainer
         avg_metrics = {
-            'test_accuracy': self.trainer.callback_metrics['loss/test'],
+            'test_accuracy': self.trainer.callback_metrics['accuracy/test'],
             'test_f1': self.trainer.callback_metrics['f1/test'],
             'test_precision': self.trainer.callback_metrics['precision/test'],
             'test_recall': self.trainer.callback_metrics['recall/test']

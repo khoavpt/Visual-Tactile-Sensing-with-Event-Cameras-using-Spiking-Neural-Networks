@@ -76,7 +76,7 @@ class ConvSpikingBlock(nn.Module):
         spk, mem = self.lif(x, mem_prev)
         x = self.pooling_layer(spk)
         return x, mem
-    
+
 class LinearSpikingBlock(nn.Module):
     """
     Linear Spiking Block: Linear -> tdBN1d -> LIF
@@ -114,16 +114,16 @@ class LinearSpikingBlock(nn.Module):
         x = x.view(-1, in_features)
 
         x = self.fc(x)
-        x = x.view(batch_size, sequence_length, -1)
+        x = x.view(batch_size, sequence_length, -1) # (batch_size, seq_len, out_features)
         x = self.bn(x)
 
         spk_list = []
         mem = mem_init
         for t in range(sequence_length):
-            spk, mem = self.lif(x[:, t], mem)
+            spk, mem = self.lif(x[:, t], mem) # (batch_size, out_features)
             spk_list.append(spk)
 
-        return torch.stack(spk_list, dim=1)
+        return torch.stack(spk_list, dim=1) # (batch_size, seq_len, out_features)
     
     def fuse_weight(self):
         """

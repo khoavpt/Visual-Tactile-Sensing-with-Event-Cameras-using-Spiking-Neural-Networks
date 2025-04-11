@@ -16,10 +16,8 @@ from collections import deque
 ROOTPATH = rootutils.setup_root(__file__, indicator=".project_root", pythonpath=True)
 CONFIG_PATH = str(ROOTPATH / "configs")
 
+import src.models as models
 from src.data.events_encoding import accumulate_dv_encode
-from src.models.convsnn import ConvSNN
-from src.models.convsnnl import ConvSNN_L
-from src.models.spiking_convlstm import SpikingConvLSTM
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -48,11 +46,11 @@ def load_model(model_name):
 
     model_type = model_name.split('_')[0].lower()
     if model_type == "convsnn":
-        model = ConvSNN.load_from_checkpoint(checkpoint_path).to(device)
+        model = models.ConvSNN.load_from_checkpoint(checkpoint_path).to(device)
     elif model_type == "convsnnl":
-        model = ConvSNN_L.load_from_checkpoint(checkpoint_path).to(device)
+        model = models.ConvSNN_L.load_from_checkpoint(checkpoint_path).to(device)
     elif model_type == "convslstm":
-        model = SpikingConvLSTM.load_from_checkpoint(checkpoint_path).to(device)
+        model = models.SpikingConvLSTM.load_from_checkpoint(checkpoint_path).to(device)
     else:
         raise Exception("Invalid model")
 
