@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torchmetrics.functional as F
+from ..utils.visualization import log_spike_activity_to_wandb
 
 class BaseSpikingModel(pl.LightningModule):
     def __init__(self, beta_init, spikegrad="fast_sigmoid", lr=0.001):
@@ -98,31 +99,45 @@ class BaseSpikingModel(pl.LightningModule):
             x = sequence[:, t]
             output, hidden_states = self.process_frame(x, hidden_states)
             outputs.append(output)
-        
+            
         outputs = torch.stack(outputs, dim=1)  # (batch_size, sequence_length, num_classes)
+        
+        # Calculate loss
+        loss = 0
+        loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([0.2, 0.8], device=self.device))
+        for t in range(sequence_length):
+            loss += loss_fn(outputs[:, t], target[:, t])
+        loss /= sequence_length
         
         # Calculate accuracy
         preds = outputs.argmax(dim=-1)  # (batch_size, sequence_length)
         correct = (preds == target).sum()
         total = target.numel()
         accuracy = correct / total
-
+        
         # Calculate F1 score
         f1 = F.f1_score(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
-
         # Calculate precision and recall
         precision = F.precision(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
         recall = F.recall(preds.view(-1), target.view(-1), num_classes=2, average='macro', task='binary')
         
+
+        # Log metrics
         metrics = {
+            'loss/test': loss,
             'accuracy/test': accuracy,
             'f1/test': f1,
             'precision/test': precision,
             'recall/test': recall
+
         }
         self.log_dict(metrics, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-
-        return metrics
+        
+        # Log spike activity
+        if batch_idx == 2:  # Only log for first batch to avoid too much data
+            log_spike_activity_to_wandb(self, batch)
+        
+        return loss
 
     
     def on_test_epoch_end(self):

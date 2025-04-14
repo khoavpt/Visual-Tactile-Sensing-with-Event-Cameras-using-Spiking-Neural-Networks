@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from .base import BaseSpikingModel
-from ..layers.basic_spiking_block import ConvSpikingBlock, LinearSpikingBlock, SparseConvSpikingBlock
+from ..layers.basic_spiking_block import ConvSpikingBlock, LinearSpikingBlock
 from ..layers.sconv2dlstm import SConv2dLSTM_CBAM
 
 class SpikingConvLSTM_CBAM(BaseSpikingModel):

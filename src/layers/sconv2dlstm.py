@@ -22,6 +22,10 @@ class SpikingCBAM(snn.SpikingNeuron):
         # Spatial Attention
         self.conv = nn.Conv2d(2, 1, kernel_size, padding=kernel_size // 2, bias=False) 
 
+        # Register buffers to store spikes
+        self.register_buffer('channel_spikes', None)
+        self.register_buffer('spatial_spikes', None)
+
     def forward(self, x):
         """
         Args: x: (batch_size, channels, height, width)
@@ -33,8 +37,7 @@ class SpikingCBAM(snn.SpikingNeuron):
         avg_out = self.linear2(self.fire(self.linear1(avg_pool)))
         max_out = self.linear2(self.fire(self.linear1(max_pool)))
 
-        channel_attention = self.fire(avg_out + max_out).unsqueeze(-1).unsqueeze(-1)
-
+        channel_attention = self.fire(avg_out + max_out).unsqueeze(-1).unsqueeze(-1) # (batch_size, channels, 1, 1)
         x = x * channel_attention
 
         # Spatial Attention
@@ -43,9 +46,12 @@ class SpikingCBAM(snn.SpikingNeuron):
 
         spatial_features = torch.cat([avg_pool_spatial, max_pool_spatial], dim=1)
 
-        spatial_attention = self.fire(self.conv(spatial_features))
-
+        spatial_attention = self.fire(self.conv(spatial_features)) # (batch_size, 1, height, width)
         x = x * spatial_attention
+
+        self.channel_spikes = channel_attention.squeeze(3)[0] # (height, width)
+        self.spatial_spikes = spatial_attention[0][0] # (height, width)
+
         return x
 
 
@@ -274,7 +280,6 @@ class SConv2dLSTM_CBAM(SpikingNeuron):
         cbam_kernel_size=3,
         cbam_reduction_ratio=2,
     ):
-
         super().__init__(
             threshold,
             spike_grad,
@@ -310,9 +315,6 @@ class SConv2dLSTM_CBAM(SpikingNeuron):
         else:
             self.padding = kernel_size[0] // 2, kernel_size[1] // 2
 
-        # Note, this applies the same Conv to all 4 gates
-        # Regular LSTMs have different dense layers applied to all 4 gates
-        # Consider: a separate nn.Conv2d instance p/gate?
         self.conv = nn.Conv2d(
             in_channels=self.in_channels + self.out_channels,
             out_channels=4 * self.out_channels,
@@ -322,6 +324,9 @@ class SConv2dLSTM_CBAM(SpikingNeuron):
         )
 
         self.cbam = SpikingCBAM(self.out_channels, cbam_kernel_size, cbam_reduction_ratio)
+        
+        # Register buffers to store spikes
+        self.register_buffer('spk_list', None)
 
     def _init_mem(self):
         syn = torch.zeros(0)
@@ -383,14 +388,14 @@ class SConv2dLSTM_CBAM(SpikingNeuron):
         else:
             self.spk = self.fire(self.mem)
 
+        self.spk_list = self.spk[0][0] # (height, width)
+
         if self.output:
             return self.spk, self.syn, self.mem
         elif self.init_hidden:
             return self.spk
         else:
             return self.spk, self.syn, self.mem
-
-
 
     def _base_state_function(self, input_):
         combined = torch.cat(
@@ -409,6 +414,7 @@ class SConv2dLSTM_CBAM(SpikingNeuron):
 
         base_fn_syn = f * self.syn + i * g
         base_fn_mem = o * torch.tanh(base_fn_syn)
+
         return base_fn_syn, base_fn_mem
 
     def _base_state_reset_zero(self, input_):

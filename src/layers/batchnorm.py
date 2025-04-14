@@ -23,28 +23,34 @@ class tdBatchNorm2d(nn.BatchNorm2d):
         x: (batch_size, time_steps, channels, height, width)
         """
         exponential_average_factor = 0.0
+    
+        if self.training:
+            if self.track_running_stats:
+                if self.num_batches_tracked is not None:
+                    self.num_batches_tracked += 1
+                    if self.momentum is None:  # use cumulative moving average
+                        exponential_average_factor = 1.0 / float(self.num_batches_tracked)
+                    else:  # use exponential moving average
+                        exponential_average_factor = self.momentum
 
-        if self.track_running_stats:
-            if self.num_batches_tracked is not None:
-                self.num_batches_tracked += 1
-                if self.momentum is None:  # use cumulative moving average
-                    exponential_average_factor = 1.0 / float(self.num_batches_tracked)
-                else:  # use exponential moving average
-                    exponential_average_factor = self.momentum
+            mean = x.mean([0, 1, 3, 4]) 
+            var = x.var([0, 1, 3, 4], unbiased=False)
+            n = x.numel() / x.size(2)
+            with torch.no_grad():
+                self.running_mean = exponential_average_factor * mean\
+                    + (1 - exponential_average_factor) * self.running_mean 
+                # update running_var with unbiased var
+                self.running_var = exponential_average_factor * var * n / (n - 1)\
+                    + (1 - exponential_average_factor) * self.running_var
 
-        mean = x.mean([0, 1, 3, 4]) 
-        var = x.var([0, 1, 3, 4], unbiased=False)
-        n = x.numel() / x.size(2)
-        with torch.no_grad():
-            self.running_mean = exponential_average_factor * mean\
-                + (1 - exponential_average_factor) * self.running_mean 
-            # update running_var with unbiased var
-            self.running_var = exponential_average_factor * var * n / (n - 1)\
-                + (1 - exponential_average_factor) * self.running_var
+            x_hat = self.alpha * self.VTH * (x - mean[None, None, :, None, None]) / (torch.sqrt(var[None, None, :, None, None] + self.eps))
+            if self.affine:
+                x_hat = x_hat * self.weight[None, None, :, None, None] + self.bias[None, None, :, None, None]
 
-        x_hat = self.alpha * self.VTH * (x - mean[None, None, :, None, None]) / (torch.sqrt(var[None, None, :, None, None] + self.eps))
-        if self.affine:
-            x_hat = x_hat * self.weight[None, None, :, None, None] + self.bias[None, None, :, None, None]
+        else:
+            x_hat = self.alpha * self.VTH * (x - self.running_mean[None, None, :, None, None]) / (torch.sqrt(self.running_var[None, None, :, None, None] + self.eps))
+            if self.affine:
+                x_hat = x_hat * self.weight[None, None, :, None, None] + self.bias[None, None, :, None, None]
 
         return x_hat
     
@@ -72,28 +78,34 @@ class tdBatchNorm1d(nn.BatchNorm1d):
         """
         exponential_average_factor = 0.0
 
-        if self.track_running_stats:
-            if self.num_batches_tracked is not None:
-                self.num_batches_tracked += 1
-                if self.momentum is None:
-                    exponential_average_factor = 1.0 / float(self.num_batches_tracked)
-                else:
-                    exponential_average_factor = self.momentum
-            
-        mean = x.mean(dim=(0, 1))
-        var = x.var(dim=(0, 1), unbiased=False)
-        n = x.numel() / x.size(2)
+        if self.training:
+            if self.track_running_stats:
+                if self.num_batches_tracked is not None:
+                    self.num_batches_tracked += 1
+                    if self.momentum is None:
+                        exponential_average_factor = 1.0 / float(self.num_batches_tracked)
+                    else:
+                        exponential_average_factor = self.momentum
+                
+            mean = x.mean(dim=(0, 1))
+            var = x.var(dim=(0, 1), unbiased=False)
+            n = x.numel() / x.size(2)
 
-        with torch.no_grad():
-            self.running_mean = exponential_average_factor * mean\
-                + (1 - exponential_average_factor) * self.running_mean
-            # update running_var with unbiased var
-            self.running_var = exponential_average_factor * var * n / (n - 1)\
-                + (1 - exponential_average_factor) * self.running_var
-        
-        x_hat = self.alpha * self.VTH * (x - mean[None, None, :]) / torch.sqrt(var[None, None, :] + self.eps)
-        if self.affine:
-            x_hat = x_hat * self.weight[None, None, :] + self.bias[None, None, :]
+            with torch.no_grad():
+                self.running_mean = exponential_average_factor * mean\
+                    + (1 - exponential_average_factor) * self.running_mean
+                # update running_var with unbiased var
+                self.running_var = exponential_average_factor * var * n / (n - 1)\
+                    + (1 - exponential_average_factor) * self.running_var
+            
+            x_hat = self.alpha * self.VTH * (x - mean[None, None, :]) / torch.sqrt(var[None, None, :] + self.eps)
+            if self.affine:
+                x_hat = x_hat * self.weight[None, None, :] + self.bias[None, None, :]
+
+        else:
+            x_hat = self.alpha * self.VTH * (x - self.running_mean[None, None, :]) / torch.sqrt(self.running_var[None, None, :] + self.eps)
+            if self.affine:
+                x_hat = x_hat * self.weight[None, None, :] + self.bias[None, None, :]
 
         return x_hat
     
