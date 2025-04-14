@@ -106,10 +106,10 @@ class SpikingConvLSTM_CBAM(BaseSpikingModel):
         Switch model to inference mode (eval + fuse bn-scale)
         """
         self.eval()
-        self.conv_block1.fuse_weight()
-        self.conv_block2.fuse_weight()
-        self.conv_block3.fuse_weight()
-        self.linear_block1.fuse_weight()
+        # self.conv_block1.fuse_weight()
+        # self.conv_block2.fuse_weight()
+        # self.conv_block3.fuse_weight()
+        # self.linear_block1.fuse_weight()
     
     # def _init_parameters(self):
     #     """
