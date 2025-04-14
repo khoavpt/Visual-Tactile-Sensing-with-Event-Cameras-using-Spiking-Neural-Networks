@@ -73,6 +73,7 @@ class ConvSpikingBlock(nn.Module):
         x: (batch_size, channels, height, width)
         """
         x = self.conv(x)
+        x = self.bn.process_frame(x)
         spk, mem = self.lif(x, mem_prev)
         x = self.pooling_layer(spk)
         return x, mem
@@ -139,7 +140,8 @@ class LinearSpikingBlock(nn.Module):
 
         x: (batch_size, in_features)
         """
-        x = self.fused_fc(x)
+        x = self.fc(x)
+        x = self.bn.process_frame(x)
         spk, mem = self.lif(x, mem_prev)
         return spk, mem
     

@@ -48,6 +48,9 @@ class tdBatchNorm2d(nn.BatchNorm2d):
 
         return x_hat
     
+    def process_frame(self, x):
+        return self.alpha * self.VTH * (x - self.running_mean[None, :, None, None]) / (torch.sqrt(self.running_var[None, :, None, None] + self.eps))
+    
     def fuse_weight(self, weight, bias):
         """BatchNorm-scale fusion for inference"""
         if self.running_var is None or self.running_mean is None:
@@ -108,3 +111,5 @@ class tdBatchNorm1d(nn.BatchNorm1d):
         fused_bias = scale * (bias - self.running_mean) + self.bias
 
         return fused_weight, fused_bias
+    def process_frame(self, x):
+        return self.alpha * self.VTH * (x - self.running_mean[None, :]) / (torch.sqrt(self.running_var[None, :] + self.eps))
