@@ -64,10 +64,10 @@ class ConvSpikingBlock(nn.Module):
         """
         Batchnorm-scale fusion for inference (CURRENTLY NOT FUSING WEIGHTS!!!!!!!)
         """
-        # with torch.no_grad():
-        #     fused_weight, fused_bias = self.bn.fuse_weight(self.conv.weight, self.conv.bias)
-        #     self.conv.weight.data.copy_(fused_weight)
-        #     self.conv.bias.data.copy_(fused_bias)
+        with torch.no_grad():
+            fused_weight, fused_bias = self.bn.fuse_weight(self.conv.weight, self.conv.bias)
+            self.conv.weight.data.copy_(fused_weight)
+            self.conv.bias.data.copy_(fused_bias)
 
     def process_frame(self, x, mem_prev):
         """
@@ -76,7 +76,7 @@ class ConvSpikingBlock(nn.Module):
         x: (batch_size, channels, height, width)
         """
         x = self.conv(x)
-        x = self.bn(x.unsqueeze(1)).squeeze(1) # (batch_size, channels, height, width)
+        # x = self.bn(x.unsqueeze(1)).squeeze(1) # (batch_size, channels, height, width)
         spk, mem = self.lif(x, mem_prev) # (batch_size, channels, height, width)
         x = self.pooling_layer(spk)
         self.spk_list = spk[0][0]
@@ -135,9 +135,9 @@ class LinearSpikingBlock(nn.Module):
         """
         Batchnorm-scale fusion for inference (CURRENTLY NOT FUSING WEIGHTS!!!!!!!)
         """
-        # fused_weight, fused_bias = self.bn.fuse_weight(self.fc.weight, self.fc.bias)
-        # self.fc.weight.data.copy_(fused_weight)
-        # self.fc.bias.data.copy_(fused_bias)
+        fused_weight, fused_bias = self.bn.fuse_weight(self.fc.weight, self.fc.bias)
+        self.fc.weight.data.copy_(fused_weight)
+        self.fc.bias.data.copy_(fused_bias)
 
     def process_frame(self, x, mem_prev):
         """
@@ -146,7 +146,7 @@ class LinearSpikingBlock(nn.Module):
         x: (batch_size, in_features)
         """
         x = self.fc(x)
-        x = self.bn(x.unsqueeze(1)).squeeze(1) # Apply BN using running stats in eval mode
+        # x = self.bn(x.unsqueeze(1)).squeeze(1) # Apply BN using running stats in eval mode
         spk, mem = self.lif(x, mem_prev) # spk: (batch_size, out_features)
         # Store spikes for visualization
         self.spk_list = spk[0].unsqueeze(1) # (out_features, 1)

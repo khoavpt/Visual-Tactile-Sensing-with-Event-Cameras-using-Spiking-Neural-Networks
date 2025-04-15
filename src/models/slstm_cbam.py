@@ -13,38 +13,38 @@ class SpikingConvLSTM_CBAM(BaseSpikingModel):
         # Conv block 1 
         self.conv_block1 = ConvSpikingBlock(
             in_channels=in_channels, out_channels=8, kernel_size=5, padding=2,
-            alpha=1, VTH=0.5,
-            spike_grad=self.spikegrad, beta_init=0.9,
+            alpha=1, VTH=1.0,
+            spike_grad=self.spikegrad, beta_init=0.25,
             # pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         # Conv block 2
         self.conv_block2 = ConvSpikingBlock(
             in_channels=8, out_channels=12, kernel_size=3, padding=1,
-            alpha=1, VTH=0.5,
-            spike_grad=self.spikegrad, beta_init=0.9,
+            alpha=1, VTH=1.0,
+            spike_grad=self.spikegrad, beta_init=0.25,
             pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         # Conv block 3
         self.conv_block3 = ConvSpikingBlock(
             in_channels=12, out_channels=16, kernel_size=3, padding=1,
-            alpha=1, VTH=0.5,
-            spike_grad=self.spikegrad, beta_init=0.9,
+            alpha=1, VTH=1.0,
+            spike_grad=self.spikegrad, beta_init=0.25,
             pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         # SConv2dLSTM
         self.sconv2dlstm = SConv2dLSTM_CBAM(
             in_channels=16, out_channels=12, kernel_size=3, max_pool=2, threshold=0.5,
-            cbam_kernel_size=3, cbam_reduction_ratio=2,
+            cbam_kernel_size=3, cbam_reduction_ratio=2
         )
 
         # Linear block 1
         self.linear_block1 = LinearSpikingBlock(
             in_features=12*4*4, out_features=2,
-            alpha=1, VTH=0.3,
-            spike_grad=self.spikegrad, beta_init=0.9,
+            alpha=1, VTH=1.0,
+            spike_grad=self.spikegrad, beta_init=0.25,
         )
         
 

@@ -23,34 +23,28 @@ class tdBatchNorm2d(nn.BatchNorm2d):
         x: (batch_size, time_steps, channels, height, width)
         """
         exponential_average_factor = 0.0
-    
-        if self.training:
-            if self.track_running_stats:
-                if self.num_batches_tracked is not None:
-                    self.num_batches_tracked += 1
-                    if self.momentum is None:  # use cumulative moving average
-                        exponential_average_factor = 1.0 / float(self.num_batches_tracked)
-                    else:  # use exponential moving average
-                        exponential_average_factor = self.momentum
 
-            mean = x.mean([0, 1, 3, 4]) 
-            var = x.var([0, 1, 3, 4], unbiased=False)
-            n = x.numel() / x.size(2)
-            with torch.no_grad():
-                self.running_mean = exponential_average_factor * mean\
-                    + (1 - exponential_average_factor) * self.running_mean 
-                # update running_var with unbiased var
-                self.running_var = exponential_average_factor * var * n / (n - 1)\
-                    + (1 - exponential_average_factor) * self.running_var
+        if self.track_running_stats:
+            if self.num_batches_tracked is not None:
+                self.num_batches_tracked += 1
+                if self.momentum is None:  # use cumulative moving average
+                    exponential_average_factor = 1.0 / float(self.num_batches_tracked)
+                else:  # use exponential moving average
+                    exponential_average_factor = self.momentum
 
-            x_hat = self.alpha * self.VTH * (x - mean[None, None, :, None, None]) / (torch.sqrt(var[None, None, :, None, None] + self.eps))
-            if self.affine:
-                x_hat = x_hat * self.weight[None, None, :, None, None] + self.bias[None, None, :, None, None]
+        mean = x.mean([0, 1, 3, 4]) 
+        var = x.var([0, 1, 3, 4], unbiased=False)
+        n = x.numel() / x.size(2)
+        with torch.no_grad():
+            self.running_mean = exponential_average_factor * mean\
+                + (1 - exponential_average_factor) * self.running_mean 
+            # update running_var with unbiased var
+            self.running_var = exponential_average_factor * var * n / (n - 1)\
+                + (1 - exponential_average_factor) * self.running_var
 
-        else:
-            x_hat = self.alpha * self.VTH * (x - self.running_mean[None, None, :, None, None]) / (torch.sqrt(self.running_var[None, None, :, None, None] + self.eps))
-            if self.affine:
-                x_hat = x_hat * self.weight[None, None, :, None, None] + self.bias[None, None, :, None, None]
+        x_hat = self.alpha * self.VTH * (x - mean[None, None, :, None, None]) / (torch.sqrt(var[None, None, :, None, None] + self.eps))
+        if self.affine:
+            x_hat = x_hat * self.weight[None, None, :, None, None] + self.bias[None, None, :, None, None]
 
         return x_hat
     
@@ -78,45 +72,54 @@ class tdBatchNorm1d(nn.BatchNorm1d):
         """
         exponential_average_factor = 0.0
 
-        if self.training:
-            if self.track_running_stats:
-                if self.num_batches_tracked is not None:
-                    self.num_batches_tracked += 1
-                    if self.momentum is None:
-                        exponential_average_factor = 1.0 / float(self.num_batches_tracked)
-                    else:
-                        exponential_average_factor = self.momentum
-                
-            mean = x.mean(dim=(0, 1))
-            var = x.var(dim=(0, 1), unbiased=False)
-            n = x.numel() / x.size(2)
-
-            with torch.no_grad():
-                self.running_mean = exponential_average_factor * mean\
-                    + (1 - exponential_average_factor) * self.running_mean
-                # update running_var with unbiased var
-                self.running_var = exponential_average_factor * var * n / (n - 1)\
-                    + (1 - exponential_average_factor) * self.running_var
+        if self.track_running_stats:
+            if self.num_batches_tracked is not None:
+                self.num_batches_tracked += 1
+                if self.momentum is None:
+                    exponential_average_factor = 1.0 / float(self.num_batches_tracked)
+                else:
+                    exponential_average_factor = self.momentum
             
-            x_hat = self.alpha * self.VTH * (x - mean[None, None, :]) / torch.sqrt(var[None, None, :] + self.eps)
-            if self.affine:
-                x_hat = x_hat * self.weight[None, None, :] + self.bias[None, None, :]
+        mean = x.mean(dim=(0, 1))
+        var = x.var(dim=(0, 1), unbiased=False)
+        n = x.numel() / x.size(2)
 
-        else:
-            x_hat = self.alpha * self.VTH * (x - self.running_mean[None, None, :]) / torch.sqrt(self.running_var[None, None, :] + self.eps)
-            if self.affine:
-                x_hat = x_hat * self.weight[None, None, :] + self.bias[None, None, :]
+        with torch.no_grad():
+            self.running_mean = exponential_average_factor * mean\
+                + (1 - exponential_average_factor) * self.running_mean
+            # update running_var with unbiased var
+            self.running_var = exponential_average_factor * var * n / (n - 1)\
+                + (1 - exponential_average_factor) * self.running_var
+        
+        x_hat = self.alpha * self.VTH * (x - mean[None, None, :]) / torch.sqrt(var[None, None, :] + self.eps)
+        if self.affine:
+            x_hat = x_hat * self.weight[None, None, :] + self.bias[None, None, :]
 
         return x_hat
     
     def fuse_weight(self, weight, bias):
-        """Fuses BatchNorm into weights for inference."""
+        """Fuses BatchNorm into the linear layer's weights and biases for inference.
+        
+        Args:
+            weight (torch.Tensor): Linear layer weights of shape (out_features, in_features)
+            bias (torch.Tensor): Linear layer biases of shape (out_features,)
+            
+        Returns:
+            fused_weight (torch.Tensor): Fused weights, same shape as `weight`
+            fused_bias (torch.Tensor): Fused biases, same shape as `bias`
+        """
         if self.running_var is None or self.running_mean is None:
             raise ValueError("tdBatchNorm1d must be trained before fusing weights.")
 
+        # Compute the scale factor per channel.
         scale = (self.weight * self.alpha * self.VTH) / torch.sqrt(self.running_var + self.eps)
+        
+        # For a linear layer, `weight` is (out_features, in_features). 
+        # Reshape scale to (out_features, 1) so it can multiply each row appropriately.
         fused_weight = weight * scale.view(-1, 1)
         
+        # Adjust the bias. Note that we subtract the running mean of the BN before scaling,
+        # and then add the BN bias.
         fused_bias = scale * (bias - self.running_mean) + self.bias
-
+        
         return fused_weight, fused_bias

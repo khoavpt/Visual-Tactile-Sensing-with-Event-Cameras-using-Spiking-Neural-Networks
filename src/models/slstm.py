@@ -13,32 +13,32 @@ class SpikingConvLSTM(BaseSpikingModel):
         # Conv block 1
         self.conv_block1 = ConvSpikingBlock(
             in_channels=in_channels, out_channels=6, kernel_size=5, 
-            alpha=1, VTH=0.8,
-            spike_grad=self.spikegrad, beta_init=0.9,
+            alpha=1, VTH=1.0,
+            spike_grad=self.spikegrad, beta_init=0.25,
             pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
         )
         # Conv block 2
         self.conv_block2 = ConvSpikingBlock(
             in_channels=6, out_channels=16, kernel_size=5, 
-            alpha=1, VTH=0.8,
-            spike_grad=self.spikegrad, beta_init=0.9,
+            alpha=1, VTH=1.0,
+            spike_grad=self.spikegrad, beta_init=0.25,
             pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
         )
         # Linear block 1
         self.linear_block1 = LinearSpikingBlock(
             in_features=16 * 5 * 5, out_features=feature_size,
-            alpha=1, VTH=0.8,
-            spike_grad=self.spikegrad, beta_init=0.9,
+            alpha=1, VTH=1.0,
+            spike_grad=self.spikegrad, beta_init=0.25,
         )
         # SLSTM
         self.slstm = snn.SLSTM(
-            input_size=feature_size, hidden_size=128, spike_grad=self.spikegrad, threshold=0.5, reset_mechanism="subtract"
+            input_size=feature_size, hidden_size=128, spike_grad=self.spikegrad, threshold=1.0, reset_mechanism="subtract"
         )
         # Linear block 2
         self.linear_block2 = LinearSpikingBlock(
             in_features=128, out_features=2,
-            alpha=1, VTH=0.8,
-            spike_grad=self.spikegrad, beta_init=0.9,
+            alpha=1, VTH=1.0,
+            spike_grad=self.spikegrad, beta_init=0.25,
         )
 
     def init_hidden_states(self):
