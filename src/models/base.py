@@ -29,7 +29,7 @@ class BaseSpikingModel(pl.LightningModule):
 
         # Calculate loss
         loss = 0
-        loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([0.2, 0.8], device=self.device))
+        loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([0.6, 0.4], device=self.device))
         for t in range(sequence.size(1)):
             loss += loss_fn(output[:, t], target[:, t])
         loss /= sequence.size(1)  # Average loss over the sequence length
@@ -104,7 +104,7 @@ class BaseSpikingModel(pl.LightningModule):
         
         # Calculate loss
         loss = 0
-        loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([0.2, 0.8], device=self.device))
+        loss_fn = nn.CrossEntropyLoss(weight=torch.tensor([0.6, 0.4], device=self.device))
         for t in range(sequence_length):
             loss += loss_fn(outputs[:, t], target[:, t])
         loss /= sequence_length

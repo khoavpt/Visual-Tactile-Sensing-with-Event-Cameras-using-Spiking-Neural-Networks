@@ -80,45 +80,46 @@ def preprocess_frames(frames, encoding_type='accumulate', target_size=(32, 32)):
     #             img = (img - min_val) / (max_val - min_val)
     #         return img
     
-    class ClipTransform:
-        def __call__(self, img):
-            return torch.clamp(img, 0, 5)
-
-    transform = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize(target_size),  # Resize the images if needed
-        transforms.Grayscale(num_output_channels=1),
-        transforms.ToTensor(),         # Convert images to tensor
-        transforms.Normalize(mean=mean, std=std),  # Normalize
-        ClipTransform(),               # Clip values to be inside [0, 1]
-        # MinMaxTransform()
-    ])
-
-    # class SplitChannelsTransform:
+    # class ClipTransform:
     #     def __call__(self, img):
-    #         return img[0], img[1]
+    #         return torch.clamp(img, 0, 5)
 
-    # class MergeChannelsTransform:
-    #     def __call__(self, imgs):
-    #         return torch.stack(imgs)
+    # transform = transforms.Compose([
+    #     transforms.ToPILImage(),
+    #     transforms.Resize(target_size),  # Resize the images if needed
+    #     transforms.Grayscale(num_output_channels=1),
+    #     transforms.ToTensor(),         # Convert images to tensor
+    #     transforms.Normalize(mean=mean, std=std),  # Normalize
+    #     # ClipTransform(),               # Clip values to be inside [0, 1]
+    #     # MinMaxTransform()
+    # ])
+
+    class SplitChannelsTransform:
+        def __call__(self, img):
+            # Split d channels into list of (H, W) tensors
+            return [img[i] for i in range(img.shape[0])]
+
+    class MergeChannelsTransform:
+        def __call__(self, imgs):
+            return torch.stack(imgs).squeeze()  # Merge list of (H, W) tensors into (d, H, W)
 
     # class RemoveExtraChannelTransform:
     #     def __call__(self, img):
     #         return img.squeeze(0)  # Remove the extra channel dimension
 
-    # transform = transforms.Compose([
-    #     SplitChannelsTransform(),
-    #     transforms.Lambda(lambda imgs: [transforms.ToPILImage()(img) for img in imgs]),
-    #     transforms.Lambda(lambda imgs: [transforms.Resize(target_size)(img) for img in imgs]),
-    #     transforms.Lambda(lambda imgs: [transforms.ToTensor()(img) for img in imgs]),
-    #     transforms.Lambda(lambda imgs: [ClipTransform()(img) for img in imgs]),
-    #     # transforms.Lambda(lambda imgs: [transforms.Normalize(mean=[mean], std=[std])(img) for img in imgs]),
-    #     transforms.Lambda(lambda imgs: [RemoveExtraChannelTransform()(img) for img in imgs]),
-    #     MergeChannelsTransform()
-    # ])
+    transform = transforms.Compose([
+        SplitChannelsTransform(),  # Split into d channels
+        transforms.Lambda(lambda imgs: [transforms.ToPILImage()(img) for img in imgs]),  # Convert to PIL
+        transforms.Lambda(lambda imgs: [transforms.Resize(target_size)(img) for img in imgs]),  # Resize
+        transforms.Lambda(lambda imgs: [transforms.ToTensor()(img) for img in imgs]),  # Convert to tensor (1, H, W)
+        transforms.Lambda(lambda imgs: [transforms.Normalize(mean=0, std=1)(img) for i, img in enumerate(imgs)]),  # Normalize per channel
+        MergeChannelsTransform()  # Merge back to (d, H, W)
+    ])
     
-    preprocessed_frames = [transform(frame) for frame in frames] # List of tensors, each of shape (2, H, W)
+    preprocessed_frames = [transform(frame) for frame in frames] # List of tensors, each of shape (d, H, W)
+    # print(preprocessed_frames[0].shape)
     return preprocessed_frames
+
 
 def split_and_create_sequences(frames, labels, sequence_length=300, steps=100, split_ratio=0.7):
     """

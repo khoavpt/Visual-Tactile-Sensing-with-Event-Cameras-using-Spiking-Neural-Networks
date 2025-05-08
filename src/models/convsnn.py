@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 from .base import BaseSpikingModel
-from ..layers.basic_spiking_block import ConvSpikingBlock, LinearSpikingBlock
+from ..layers.basic_spiking_block import ConvSpikingBlock, LinearSpikingBlock, SparseConvSpikingBlock
 
 class ConvSNN(BaseSpikingModel):
     def __init__(self, beta_init, spikegrad="fast_sigmoid", in_channels=1, lr=0.001):
