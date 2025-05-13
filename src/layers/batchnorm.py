@@ -59,6 +59,10 @@ class tdBatchNorm2d(nn.BatchNorm2d):
 
         return fused_weight, fused_bias
     
+    def process_frame(self, x):
+        return self.alpha * self.VTH * (x - self.running_mean[None, :, None, None]) / (torch.sqrt(self.running_var[None, :, None, None] + self.eps))
+
+    
 class tdBatchNorm1d(nn.BatchNorm1d):
     """Implementation of Time-dependent BatchNorm1d"""
     def __init__(self, num_features, eps=1e-05, momentum=0.1, alpha=1, affine=True, track_running_stats=True, VTH=1.0):
@@ -123,3 +127,6 @@ class tdBatchNorm1d(nn.BatchNorm1d):
         fused_bias = scale * (bias - self.running_mean) + self.bias
         
         return fused_weight, fused_bias
+    
+    def process_frame(self, x):
+        return self.alpha * self.VTH * (x - self.running_mean[None, :]) / (torch.sqrt(self.running_var[None, :] + self.eps))

@@ -1,6 +1,5 @@
 _target_: src.models.slstm.SpikingConvLSTM
 beta_init: 0.9
 spikegrad: fast_sigmoid
-feature_size: 64
 in_channels: 1
 lr: 0.001

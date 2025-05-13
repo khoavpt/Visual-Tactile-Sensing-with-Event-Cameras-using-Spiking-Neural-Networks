@@ -1,11 +1,11 @@
-import snntorch as snn
 import torch
 import torch.nn as nn
 
 from .base import BaseSpikingModel
 from ..layers.basic_spiking_block import ConvSpikingBlock, LinearSpikingBlock
+from ..layers.sconv2dlstm import SConv2dLSTM_CBAM
 
-class SpikingConvLSTM(BaseSpikingModel):
+class SpikingConvLSTM_CBAMV2(BaseSpikingModel):
     def __init__(self, beta_init, spikegrad="fast_sigmoid", in_channels=1, lr=0.001):
         super().__init__(beta_init=beta_init, spikegrad=spikegrad, lr=lr)
         self.save_hyperparameters()
@@ -13,42 +13,38 @@ class SpikingConvLSTM(BaseSpikingModel):
         # Conv block 1 
         self.conv_block1 = ConvSpikingBlock(
             in_channels=in_channels, out_channels=8, kernel_size=5, padding=2,
-            alpha=1, VTH=1.0,
-            spike_grad=self.spikegrad, beta_init=0.25,
+            alpha=1, VTH=0.5,
+            spike_grad=self.spikegrad, beta_init=0.9,
             # pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         # Conv block 2
         self.conv_block2 = ConvSpikingBlock(
             in_channels=8, out_channels=12, kernel_size=3, padding=1,
-            alpha=1, VTH=1.0,
-            spike_grad=self.spikegrad, beta_init=0.25,
+            alpha=1, VTH=0.5,
+            spike_grad=self.spikegrad, beta_init=0.9,
             pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
         # Conv block 3
         self.conv_block3 = ConvSpikingBlock(
             in_channels=12, out_channels=16, kernel_size=3, padding=1,
-            alpha=1, VTH=1.0,
-            spike_grad=self.spikegrad, beta_init=0.25,
+            alpha=1, VTH=0.5,
+            spike_grad=self.spikegrad, beta_init=0.9,
             pooling_layer=nn.MaxPool2d(kernel_size=2, stride=2),
         )
 
-        # # SConv2dLSTM
-        # self.sconv2dlstm = SConv2dLSTM_CBAM(
-        #     in_channels=16, out_channels=12, kernel_size=3, max_pool=2, threshold=0.5,
-        #     cbam_kernel_size=3, cbam_reduction_ratio=2
-        # )
-
-        self.sconv2dlstm = snn.SConv2dLSTM(
+        # SConv2dLSTM
+        self.sconv2dlstm = SConv2dLSTM_CBAM(
             in_channels=16, out_channels=12, kernel_size=3, max_pool=2, threshold=0.5,
+            cbam_kernel_size=3, cbam_reduction_ratio=2,
         )
 
         # Linear block 1
         self.linear_block1 = LinearSpikingBlock(
             in_features=12*4*4, out_features=2,
-            alpha=1, VTH=1.0,
-            spike_grad=self.spikegrad, beta_init=0.25,
+            alpha=1, VTH=0.3,
+            spike_grad=self.spikegrad, beta_init=0.9,
         )
         
 
@@ -110,10 +106,10 @@ class SpikingConvLSTM(BaseSpikingModel):
         Switch model to inference mode (eval + fuse bn-scale)
         """
         self.eval()
-        self.conv_block1.fuse_weight()
-        self.conv_block2.fuse_weight()
-        self.conv_block3.fuse_weight()
-        self.linear_block1.fuse_weight()
+        # self.conv_block1.fuse_weight()
+        # self.conv_block2.fuse_weight()
+        # self.conv_block3.fuse_weight()
+        # self.linear_block1.fuse_weight()
     
     # def _init_parameters(self):
     #     """

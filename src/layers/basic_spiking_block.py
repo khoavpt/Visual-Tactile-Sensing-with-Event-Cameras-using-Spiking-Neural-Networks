@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import snntorch as snn
-import spconv.pytorch as spconv
 
 from .batchnorm import tdBatchNorm2d, tdBatchNorm1d
 
@@ -81,6 +80,18 @@ class ConvSpikingBlock(nn.Module):
         x = self.pooling_layer(spk)
         self.spk_list = spk[0][0]
         return x, mem
+    
+    def process_frame_no_fuseweight(self, x, mem_prev):
+        """
+        Inference: Skip batch norm, use pre-fused weights
+
+        x: (batch_size, channels, height, width)
+        """
+        x = self.conv(x)
+        x = self.bn.process_frame(x)
+        spk, mem = self.lif(x, mem_prev)
+        x = self.pooling_layer(spk)
+        return x, mem
 
 class LinearSpikingBlock(nn.Module):
     """
@@ -150,6 +161,19 @@ class LinearSpikingBlock(nn.Module):
         spk, mem = self.lif(x, mem_prev) # spk: (batch_size, out_features)
         # Store spikes for visualization
         self.spk_list = spk[0].unsqueeze(1) # (out_features, 1)
+        return spk, mem
+    
+    def process_frame_no_fuseweight(self, x, mem_prev):
+        """
+        Inference: Skip batch norm, use pre-fused weights
+
+        x: (batch_size, in_features)
+        """
+
+        print("aaaa")
+        x = self.fc(x)
+        x = self.bn.process_frame(x)
+        spk, mem = self.lif(x, mem_prev)
         return spk, mem
     
 # class SparseConvSpikingBlock(nn.Module):
