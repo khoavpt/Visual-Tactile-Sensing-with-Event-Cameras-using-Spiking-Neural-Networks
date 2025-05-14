@@ -48,33 +48,63 @@ def timesurface_dv_encode(events: dv.EventStore, resolution: tuple[int, int]) ->
     frame = surfacer.generateFrame()
     return frame.image # Shape: (H, W)
 
-def custom_encode(events: dv.EventStore, resolution: tuple[int, int]) -> np.ndarray:
+def custom_encode(events: dv.EventStore, resolution: tuple[int, int], dimension=8) -> np.ndarray:
+    """
+    Encode a DVS event store into a multi-channel sinusoidal-encoded tensor with shape (dimension, H, W).
+    
+    Args:
+        events: dv.EventStore, containing events with (timestamp, x, y, polarity).
+        resolution: tuple[int, int], (H, W) of the sensor grid.
+        dimension: int, number of encoding dimensions (d).
+    
+    Returns:
+        np.ndarray: Tensor of shape (dimension, H, W) with sinusoidal encoding of the most recent event per pixel.
+    """
     H, W = resolution
-    frame_on = np.zeros((H, W), dtype=np.float32)
-    frame_off = np.zeros((H, W), dtype=np.float32)
-
+    d = dimension
+    
+    # Initialize output tensor with shape (d, H, W)
+    tensor = np.zeros((d, H, W), dtype=np.float32)
+    
+    # Handle empty event store
     if events.size() == 0:
-        return np.stack([frame_on, frame_off], axis=0)
-
+        return tensor
+    
+    # Extract event data as numpy array
     arr = events.numpy()  # dtype [('timestamp','<i8'), ('x','<i2'), ('y','<i2'), ('polarity','i1')]
     t_array = arr['timestamp']
     x_array = arr['x']
     y_array = arr['y']
     p_array = arr['polarity']
-
+    
+    # Compute batch duration (in microseconds)
     lowest_time = t_array.min()
     highest_time = t_array.max()
     batch_time = highest_time - lowest_time + 1
-
-    # Compute encoded times
-    scale = 2 * np.pi / batch_time
-    encoded_times = np.sin(scale * (t_array - lowest_time))
-
-    on_mask = (p_array == 1)
-    off_mask = ~on_mask
-
-    np.add.at(frame_on, (x_array[on_mask], y_array[on_mask]), encoded_times[on_mask])
-    # Accumulate OFF events
-    np.add.at(frame_off, (x_array[off_mask], y_array[off_mask]), encoded_times[off_mask])
-
-    return np.stack([frame_on, frame_off], axis=0) # Shape: (2, H, W)
+    
+    # Initialize arrays to track the most recent event per pixel
+    latest_time = np.zeros((H, W), dtype=np.int64)
+    latest_polarity = np.zeros((H, W), dtype=np.int8)
+    
+    # Find the most recent event per pixel
+    for x, y, t, p in zip(x_array, y_array, t_array, p_array):
+        if t > latest_time[x, y]:
+            latest_time[x, y] = t
+            latest_polarity[x, y] = p
+    
+    # Compute sinusoidal encoding for each pixel
+    for x in range(H):
+        for y in range(W):
+            if latest_time[x, y] > 0:  # Event exists at this pixel
+                # Normalize timestamp
+                t = latest_time[x, y] - lowest_time
+                # Polarity scaling: +0.15 for ON, -0.15 for OFF
+                delta = 0.15 if latest_polarity[x, y] == 1 else -0.15
+                # Compute sinusoidal encoding
+                for i in range(d // 2):
+                    freq = batch_time * (10000 ** (2 * i / d))
+                    tensor[2*i, x, y] = delta * np.sin(t / freq)
+                    tensor[2*i+1, x, y] = delta * np.cos(t / freq)
+    
+    # print(tensor.shape)
+    return tensor # shape: (d, H, W) default: (8, 240, 180)

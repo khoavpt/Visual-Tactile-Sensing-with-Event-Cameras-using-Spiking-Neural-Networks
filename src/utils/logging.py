@@ -24,11 +24,11 @@ class LossLogger(pl.Callback):
         epoch_duration = time.time() - self.epoch_start_time
         self.epoch_durations.append(epoch_duration)
         
-        train_loss = trainer.callback_metrics.get('train_loss')
-        train_accuracy = trainer.callback_metrics.get('train_accuracy')
-        train_f1 = trainer.callback_metrics.get('train_f1')
-        train_precision = trainer.callback_metrics.get('train_precision')
-        train_recall = trainer.callback_metrics.get('train_recall')
+        train_loss = trainer.callback_metrics.get('loss/train')
+        train_accuracy = trainer.callback_metrics.get('accuracy/train')
+        train_f1 = trainer.callback_metrics.get('f1/train')
+        train_precision = trainer.callback_metrics.get('precision/train')
+        train_recall = trainer.callback_metrics.get('recall/train')
         if train_loss is not None:
             self.train_losses.append(train_loss.item())
         if train_accuracy is not None:
@@ -41,11 +41,11 @@ class LossLogger(pl.Callback):
             self.train_recalls.append(train_recall.item())
 
     def on_validation_epoch_end(self, trainer, pl_module):
-        val_loss = trainer.callback_metrics.get('val_loss')
-        val_accuracy = trainer.callback_metrics.get('val_accuracy')
-        val_f1 = trainer.callback_metrics.get('val_f1')
-        val_precision = trainer.callback_metrics.get('val_precision')
-        val_recall = trainer.callback_metrics.get('val_recall')
+        val_loss = trainer.callback_metrics.get('loss/val')
+        val_accuracy = trainer.callback_metrics.get('accuracy/val')
+        val_f1 = trainer.callback_metrics.get('f1/val')
+        val_precision = trainer.callback_metrics.get('precision/val')
+        val_recall = trainer.callback_metrics.get('recall/val')
         if val_loss is not None:
             self.val_losses.append(val_loss.item())
         if val_accuracy is not None:

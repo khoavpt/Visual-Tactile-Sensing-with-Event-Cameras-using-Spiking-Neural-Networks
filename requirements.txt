@@ -1,0 +1,14 @@
+torch==2.1.2
+torchvision==0.16.2
+dv-processing==1.7.9
+pytorch-lightning==2.3.3
+snntorch==0.9.1
+rootutils==1.0.7
+omegaconf==2.1.0
+numpy==1.24.3
+hydra==1.2.0
+matplotlib==3.6.2
+opencv-python==4.6.0.66
+scikit-learn==1.6.0
+flask==3.1.0
+flask-socketio==5.5.1

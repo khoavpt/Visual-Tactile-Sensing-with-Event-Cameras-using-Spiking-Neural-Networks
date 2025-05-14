@@ -59,6 +59,10 @@ class tdBatchNorm2d(nn.BatchNorm2d):
 
         return fused_weight, fused_bias
     
+    def process_frame(self, x):
+        return self.alpha * self.VTH * (x - self.running_mean[None, :, None, None]) / (torch.sqrt(self.running_var[None, :, None, None] + self.eps))
+
+    
 class tdBatchNorm1d(nn.BatchNorm1d):
     """Implementation of Time-dependent BatchNorm1d"""
     def __init__(self, num_features, eps=1e-05, momentum=0.1, alpha=1, affine=True, track_running_stats=True, VTH=1.0):
@@ -98,13 +102,31 @@ class tdBatchNorm1d(nn.BatchNorm1d):
         return x_hat
     
     def fuse_weight(self, weight, bias):
-        """Fuses BatchNorm into weights for inference."""
+        """Fuses BatchNorm into the linear layer's weights and biases for inference.
+        
+        Args:
+            weight (torch.Tensor): Linear layer weights of shape (out_features, in_features)
+            bias (torch.Tensor): Linear layer biases of shape (out_features,)
+            
+        Returns:
+            fused_weight (torch.Tensor): Fused weights, same shape as `weight`
+            fused_bias (torch.Tensor): Fused biases, same shape as `bias`
+        """
         if self.running_var is None or self.running_mean is None:
             raise ValueError("tdBatchNorm1d must be trained before fusing weights.")
 
+        # Compute the scale factor per channel.
         scale = (self.weight * self.alpha * self.VTH) / torch.sqrt(self.running_var + self.eps)
+        
+        # For a linear layer, `weight` is (out_features, in_features). 
+        # Reshape scale to (out_features, 1) so it can multiply each row appropriately.
         fused_weight = weight * scale.view(-1, 1)
         
+        # Adjust the bias. Note that we subtract the running mean of the BN before scaling,
+        # and then add the BN bias.
         fused_bias = scale * (bias - self.running_mean) + self.bias
-
+        
         return fused_weight, fused_bias
+    
+    def process_frame(self, x):
+        return self.alpha * self.VTH * (x - self.running_mean[None, :]) / (torch.sqrt(self.running_var[None, :] + self.eps))
