@@ -17,7 +17,7 @@ class BaseSpikingModel(pl.LightningModule):
         if spikegrad == 'fast_sigmoid':
             self.spikegrad = snn.surrogate.fast_sigmoid()
         elif spikegrad == 'arctan':
-            self.spikegrad = snn.surrogate.atan()
+            self.spikegrad = snn.surrogate.atan(alpha=2)
         elif spikegrad == 'heaviside':
             self.spikegrad = snn.surrogate.heaviside()
         else:
@@ -77,7 +77,7 @@ class BaseSpikingModel(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
-        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
         return {
             'optimizer': optimizer,
             'lr_scheduler': {

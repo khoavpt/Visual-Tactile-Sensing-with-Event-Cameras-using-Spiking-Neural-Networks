@@ -37,7 +37,7 @@ class SpikingConvLSTM_CBAM(BaseSpikingModel):
         # SConv2dLSTM
         self.sconv2dlstm = SConv2dLSTM_CBAM(
             in_channels=16, out_channels=12, kernel_size=3, max_pool=2, threshold=0.5,
-            cbam_kernel_size=3, cbam_reduction_ratio=2
+            cbam_kernel_size=7, cbam_reduction_ratio=2
         )
 
         # Linear block 1
