@@ -25,13 +25,15 @@ git clone https://github.com/khoavpt/Visual-Tactile-Sensing-with-Event-Cameras-u
 
 ### 2. Install Dependencies
 ```bash
-pip install -r requirements.txt
+cd Visual-Tactile-Sensing-with-Event-Cameras-using-Spiking-Neural-Networks
+conda env create -f snn_env.yaml
+conda activate snn 
 ```
 
 ## Training Models for Tactile Sensing
 
 ### Step 1: Download Raw Data
-Download raw AEDAT4 data from the provided [Google Drive link](https://drive.google.com/drive/folders/1Aac3Xi6cK6aUR3ELnsJXgvIMCjjYVNi0) and place it in the `data/raw_data` directory.
+Download raw AEDAT4 data from the provided [Google Drive link](https://drive.google.com/drive/folders/1Aac3Xi6cK6aUR3ELnsJXgvIMCjjYVNi0) and place it in the `data/raw_data` directory (`raw12.aedat4` hasn’t been labeled; remove it for now.).
 
 ### Step 2: Process Raw Data for Training
 Convert the raw AEDAT4 data into sequences of frames and save them as `.pt` files:
@@ -58,12 +60,12 @@ python src/process_train_data.py data_module.batch_size=64 data_module.input_dir
 ```
 
 ### Step 3: Train the Model
-After processing the data, train the model using `train.py`:
+After processing the data, train the model using `train.py` (training information is tracked using WandB, so basic WandB setup is required):
 ```bash
 python src/train.py
 ```
 
-This script uses the configuration specified in `configs/model`. You can switch between models and adjust hyperparameters as needed.
+This script uses the configuration specified in `configs/model`. You can switch between models and adjust hyperparameters as needed. The input data used for training is set using the arguments `data_module.output_dir`!
 
 #### Switching Between Models
 To switch between different models (e.g., ConvLSTM , ConvSNN), specify the model configuration in the command line:
@@ -81,6 +83,11 @@ python src/train.py model=convsnn_cf
 - **For ConvLSTM:**
   - `feature_size`: Size of the feature vector for LSTM
   - `in_channels`: Number of input channels (`custom` encoding methods require 2 channels)
+
+- **For SpikingConvLSTM CBAM** (main)
+  - `beta_init`: Initial beta value.
+  - `spikegrad`: Surrogate gradient function (`fast_sigmoid`, `arctan`, `heaviside`).
+  - ...
 
 #### Customizable Trainer Parameters
 - `max_epochs`: Maximum number of training epochs.
