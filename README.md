@@ -33,7 +33,7 @@ conda activate snn
 ## Training Models for Tactile Sensing
 
 ### Step 1: Download Raw Data
-Download raw AEDAT4 data from the provided [Google Drive link](https://drive.google.com/drive/folders/1Aac3Xi6cK6aUR3ELnsJXgvIMCjjYVNi0) and place it in the `data/raw_data` directory (`raw12.aedat4` hasn’t been labeled; remove it for now.).
+Download raw AEDAT4 data from the provided [Google Drive link](https://drive.google.com/drive/folders/1-mzwYg_bRLezEZxg1s88hQocoUau0R7Q?usp=sharing) and place it in the `data/raw_data` directory.
 
 ### Step 2: Process Raw Data for Training
 Convert the raw AEDAT4 data into sequences of frames and save them as `.pt` files:
