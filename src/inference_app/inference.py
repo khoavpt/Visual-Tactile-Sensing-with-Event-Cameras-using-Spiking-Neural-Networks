@@ -2,44 +2,75 @@ import cv2 as cv
 import dv_processing as dv
 import torch
 from torchvision import transforms
+from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO
 from datetime import timedelta
 import time
 import rootutils
+import os
 from threading import Thread
 from queue import Queue
-import tkinter as tk
-from PIL import Image, ImageTk
 
 ROOTPATH = rootutils.setup_root(__file__, indicator=".project_root", pythonpath=True)
+CONFIG_PATH = str(ROOTPATH / "configs")
 
 import src.models as models
-from src.models.slstm1d import SpikingConvLSTM1d
 from src.data.events_encoding import accumulate_dv_encode
+
+app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Configs
+# Globals
+capture = None
+model = None
+slicer = None
+hidden_states = None
 frame_queue = Queue(maxsize=1)
-running = True
-reset_threshold = 30  # Number of consecutive "No Press" before reset
+running = False
+source_type = "file"
 no_press_counter = 0
+reset_threshold = 30  # Số frame No Press liên tiếp trước khi reset
+
+# FPS tracking
+last_fps_time = 0
+fps_counter = 0
+
 idx_to_label = {0: "No press", 1: "Press"}
 
-model = None
-hidden_states = None
-capture = None
-slicer = None
-source_type = "file"
+def load_model(model_name):
+    global model, hidden_states
+    checkpoint_path = f"{ROOTPATH}/saved_models/{model_name}"
 
-# GUI Elements
-tk_root = None
-tk_image_label = None
-tk_prediction_var = None  # Using StringVar for dynamic text
-tk_fps_var = None         # Using StringVar for dynamic text
+    mtype = model_name.split('_')[0].lower()
+    if mtype == "convsnn":
+        model = models.ConvSNN.load_from_checkpoint(checkpoint_path, strict=False).to(device)
+    elif mtype == "convsnnl":
+        model = models.ConvSNN_L.load_from_checkpoint(checkpoint_path, strict=False).to(device)
+    elif mtype == "convslstm":
+        model = models.SpikingConvLSTM.load_from_checkpoint(checkpoint_path, strict=False).to(device)
+    elif mtype == "convslstmcbamspike":
+        model = models.SpikingConvLSTM_CBAM.load_from_checkpoint(checkpoint_path, strict=False).to(device)
+    elif mtype == "convslstmcbam2":
+        model = models.SpikingConvLSTM_CBAM.load_from_checkpoint(checkpoint_path, strict=False).to(device)
+    elif mtype == "convslstmcbam3":
+        model = models.SpikingConvLSTM_CBAM.load_from_checkpoint(checkpoint_path, strict=False).to(device)
+    else:
+        raise Exception("Invalid model type")
 
-# FPS calculation state for GUI loop
-last_time_fps_calc = 0
-frame_count_fps_calc = 0
+    model.to_inference_mode()
+    hidden_states = model.init_hidden_states()
+
+def load_data(data_name=None, source_type="file"):
+    global capture, slicer
+    if source_type == "live":
+        capture = dv.io.CameraCapture()
+    else:
+        raw_path = f'{ROOTPATH}/data/raw_data/{data_name}'
+        capture = dv.io.MonoCameraRecording(raw_path)
+    slicer = dv.EventStreamSlicer()
+    slicer.doEveryTimeInterval(timedelta(milliseconds=10), slicing_callback)
 
 class ClipTransform:
     def __call__(self, img):
@@ -54,172 +85,104 @@ transform = transforms.Compose([
     ClipTransform(),
 ])
 
-def load_model(model_name):
-    global model, hidden_states
-    checkpoint_path = f"{ROOTPATH}/saved_models/{model_name}"
-    model_type = model_name.split('_')[0].lower()
-
-    if model_type == "convsnn":
-        model = models.ConvSNN.load_from_checkpoint(checkpoint_path).to(device)
-    elif model_type == "convsnnl":
-        model = models.ConvSNN_L.load_from_checkpoint(checkpoint_path).to(device)
-    elif model_type == "convslstm":
-        model = models.SpikingConvLSTM.load_from_checkpoint(checkpoint_path).to(device)
-    elif model_type == "convslstm1d":
-        model = SpikingConvLSTM1d.load_from_checkpoint(checkpoint_path).to(device)
-    elif model_type == "convslstmcbam2":
-        model = models.SpikingConvLSTM_CBAM.load_from_checkpoint(checkpoint_path, strict=False).to(device)
-    else:
-        raise Exception("Invalid model")
-
-    model.to_inference_mode()
-    hidden_states = model.init_hidden_states()
-
-    slicer = dv.EventStreamSlicer()
-    slicer.doEveryTimeInterval(timedelta(milliseconds=33), slicing_callback)
-
 def slicing_callback(events: dv.EventStore):
     if events.size() == 0:
         return
     frame = accumulate_dv_encode(events, capture.getEventResolution())
+    frame_vis = cv.resize(frame, (640, 480))
+    _, buffer = cv.imencode('.jpg', frame_vis)
+    socketio.emit('frame', {'image': buffer.tobytes()})
     try:
         frame_queue.put_nowait(frame)
     except:
         frame_queue.get_nowait()
         frame_queue.put_nowait(frame)
 
-def update_gui():
-    global hidden_states, no_press_counter, running
-    global last_time_fps_calc, frame_count_fps_calc
-    global tk_root, tk_image_label, tk_prediction_var, tk_fps_var, model, device, transform, idx_to_label, frame_queue
+def inference_loop():
+    global hidden_states, no_press_counter, last_fps_time, fps_counter
+    while running:
+        try:
+            # t0 = time.perf_counter()
+            frame = frame_queue.get(timeout=0.1)
+            inp = transform(frame).unsqueeze(0).to(device)
+            output, hidden_states = model.process_frame(inp, hidden_states)
+            pred = output.argmax(dim=1).item()
+            # t1 = time.perf_counter()
+            # print(f"Processing time: {t1 - t0:.4f} seconds")
 
-    if not running:
-        return
+            # FPS
+            now = time.time()
+            fps_counter += 1
+            if now - last_fps_time >= 1.0:
+                socketio.emit('prediction', {
+                    'label': idx_to_label[pred],
+                    'fps': fps_counter
+                })
+                fps_counter = 0
+                last_fps_time = now
+            else:
+                socketio.emit('prediction', {'label': idx_to_label[pred]})
 
-    try:
-        frame = frame_queue.get(timeout=0.05)  # Shorter timeout for GUI responsiveness
-        frame_input = transform(frame).unsqueeze(0).to(device)
-        output, hidden_states_updated = model.process_frame(frame_input, hidden_states)
-        hidden_states = hidden_states_updated # Ensure hidden_states is updated
-        pred = output.argmax(dim=1).item()
-        # print(f"Prediction: {pred}")
-        label = idx_to_label[pred]
-
-        # FPS calculation
-        frame_count_fps_calc += 1
-        current_time = time.time()
-        fps_display_val = "Calculating..."
-        if current_time - last_time_fps_calc >= 1.0:
-            fps_display_val = str(frame_count_fps_calc)
-            frame_count_fps_calc = 0
-            last_time_fps_calc = current_time
-        elif tk_fps_var.get() != "Calculating..." and "FPS:" in tk_fps_var.get() : # Keep old FPS if not updating
-             fps_display_val = tk_fps_var.get().split(":")[1].strip()
-
-
-        # Update GUI labels
-        tk_prediction_var.set(f"Prediction: {label}")
-        if fps_display_val != "Calculating...": # only update if not default
-            tk_fps_var.set(f"FPS: {fps_display_val}")
-
-
-        # Prepare frame for display
-        display_frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR) # Assuming frame is grayscale
-        display_frame_resized = cv.resize(display_frame, (640, 480))
-
-        # Convert to Tkinter format
-        img = Image.fromarray(display_frame_resized)
-        imgtk = ImageTk.PhotoImage(image=img)
-        tk_image_label.imgtk = imgtk  # Keep a reference!
-        tk_image_label.configure(image=imgtk)
-
-        # Reset logic
-        if pred == 0:
-            no_press_counter += 1
-            if no_press_counter >= reset_threshold:
-                hidden_states = model.init_hidden_states()
+            # Reset hidden nếu No Press quá threshold
+            if pred == 0:
+                no_press_counter += 1
+                if no_press_counter >= reset_threshold:
+                    hidden_states = model.init_hidden_states()
+                    no_press_counter = 0
+                    # print("Resetting hidden states")
+            else:
                 no_press_counter = 0
-                print("Reset hidden states")
-        else:
-            no_press_counter = 0
 
-    except Exception as e:
-        # print(f"Error in update_gui: {e}") # Optional: for debugging
-        pass # Continue if queue is empty or other minor error
-
-    if running:
-        tk_root.after(33, update_gui) # Schedule next update (matches slicer approx)
-
-def start_gui_and_inference():
-    global running, tk_root, tk_image_label, tk_prediction_var, tk_fps_var
-    global last_time_fps_calc, frame_count_fps_calc
-
-    running = True # Ensure running is true when starting
-
-    tk_root = tk.Tk()
-    tk_root.title("DV Prediction GUI")
-
-    # Initialize FPS calculation timers
-    last_time_fps_calc = time.time()
-    frame_count_fps_calc = 0
-
-    # Create and place GUI elements
-    tk_image_label = tk.Label(tk_root)
-    tk_image_label.pack(padx=10, pady=10)
-
-    tk_prediction_var = tk.StringVar()
-    tk_prediction_var.set("Prediction: Waiting for data...")
-    prediction_label_display = tk.Label(tk_root, textvariable=tk_prediction_var, font=("Helvetica", 16))
-    prediction_label_display.pack(pady=5)
-
-    tk_fps_var = tk.StringVar()
-    tk_fps_var.set("FPS: Calculating...")
-    fps_label_display = tk.Label(tk_root, textvariable=tk_fps_var, font=("Helvetica", 14))
-    fps_label_display.pack(pady=5)
-
-    def on_quit():
-        global running
-        running = False
-        if tk_root: # Check if root exists
-             tk_root.destroy()
-
-    quit_button = tk.Button(tk_root, text="Quit", command=on_quit, width=10)
-    quit_button.pack(pady=10)
-
-    tk_root.protocol("WM_DELETE_WINDOW", on_quit) # Handle window close button
-
-    update_gui()  # Start the GUI update loop
-    tk_root.mainloop()
-
-def load_data(data_name=None, src_type="file"):
-    global capture, slicer, source_type
-    source_type = src_type
-    if src_type == "live":
-        capture = dv.io.CameraCapture()
-    else:
-        path = f"{ROOTPATH}/data/raw_data/{data_name}"
-        capture = dv.io.MonoCameraRecording(path)
-
-    slicer = dv.EventStreamSlicer()
-    slicer.doEveryTimeInterval(timedelta(milliseconds=33), slicing_callback)
+        except Exception:
+            continue
 
 def event_processing_loop():
     while running and capture.isRunning():
         events = capture.getNextEventBatch()
-        if events:
+        if events is not None:
             slicer.accept(events)
             if source_type == "file":
                 duration = events.getHighestTime() - events.getLowestTime()
                 time.sleep(duration / 1e6)
 
-def main(model_name, data_name=None, source="file"):
-    load_model(model_name)
-    load_data(data_name, source)
-    Thread(target=event_processing_loop, daemon=True).start()
-    start_gui_and_inference()  # Changed from inference_loop()
+@app.route('/')
+def index():
+    model_files = [f for f in os.listdir(f"{ROOTPATH}/saved_models") if f.endswith('.ckpt')]
+    data_files = [f for f in os.listdir(f"{ROOTPATH}/data/raw_data") if f.endswith('.aedat4')]
+    return render_template('index.html', models=model_files, data_files=data_files)
+
+@app.route('/start_processing', methods=['POST'])
+def start_processing():
+    global source_type, running
+    data = request.get_json()
+    model_name = data.get('model')
+    data_file = data.get('data')
+    source_type = data.get('source_type', 'file')
+    try:
+        running = True
+        load_model(model_name)
+        load_data(data_file, source_type)
+        Thread(target=event_processing_loop, daemon=True).start()
+        Thread(target=inference_loop, daemon=True).start()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route('/stop_processing', methods=['POST'])
+def stop_processing():
+    global running, capture, frame_queue, hidden_states, no_press_counter
+    running = False
+    # Dừng camera nếu đang chạy
+    try:
+        if capture is not None and capture.isRunning():
+            capture.stop()
+    except Exception:
+        pass
+    # Reset lại trạng thái
+    frame_queue = Queue(maxsize=1)
+    hidden_states = None
+    no_press_counter = 0
+    return jsonify({"status": "success"})
 
 if __name__ == '__main__':
-    # Example usage
-    model_file = "convslstm1d_acc.ckpt"       # Replace with your model
-    data_file = "raw2.aedat4"          # Replace with your AEDAT4 file (if source is "file")
-    main(model_file, data_file, source="file")  # or use source="live" for camera
+    socketio.run(app, host='0.0.0.0', port=8000, debug=False, allow_unsafe_werkzeug=True)

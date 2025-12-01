@@ -1,137 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Inference</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
-    <style>
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .controls {
-            margin-bottom: 20px;
-        }
-        select {
-            margin: 10px;
-            padding: 5px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .input-group {
-        margin-bottom: 15px;
-        }
-        .input-group label {
-            margin-right: 20px;
-        }
-        #data_select.hidden {
-            display: none;
-        }
-        .prediction-display {
-            margin-top: 20px;
-            text-align: center;
-            padding: 10px;
-            background-color: #f5f5f5;
-            border-radius: 5px;
-        }
-        #prediction {
-            font-weight: bold;
-            color: #4CAF50;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Real-time Inference</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; font-family:'Roboto',sans-serif; background:#eef2f5; display:flex; justify-content:center; align-items:center; height:100vh; }
+    .card { background:#fff; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1); max-width:1000px; width:100%; padding:24px; }
+    .header { text-align:center; margin-bottom:24px; }
+    .controls { display:flex; flex-wrap:wrap; gap:16px; justify-content:center; align-items:center; margin-bottom:24px; }
+    .controls .input-group { display:flex; gap:12px; }
+    .controls label { display:flex; align-items:center; font-weight:500; cursor:pointer; }
+    .controls input[type="radio"] { margin-right:6px; }
+    .controls select { padding:8px 12px; border-radius:6px; border:1px solid #ccc; font-size:14px; }
+    .controls select:focus { border-color:#4caf50; }
+    .controls button { padding:12px 24px; background-color:#4caf50; color:#fff; font-size:14px; border:none; border-radius:6px; cursor:pointer; transition:background-color .2s, transform .1s; }
+    .controls button:hover { background-color:#45a049; }
+    .controls button:active { transform:scale(0.98); }
+    #data_select.hidden { display:none; }
+    .video-wrapper { display:flex; justify-content:center; margin-bottom:24px; }
+    #video_feed { border-radius:8px; max-width:100%; width: 640px; height: 480px;; background:#000; object-fit:cover; }
+    .prediction-display { background:#f5f5f5; border-radius:8px; padding:16px; text-align:center; }
+    .prediction-display h2 { margin:0 0 8px; font-weight:500; }
+    .prediction-display #prediction { color:#4caf50; font-size:1.2em; }
+    .prediction-display p { margin:0; font-size:0.9em; color:#555; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Real-time Inference Stream</h1>
-        
-        <div class="controls">
-            <div class="input-group">
-                <label><input type="radio" name="source" value="file" checked> Recorded File</label>
-                <label><input type="radio" name="source" value="live"> Live Camera</label>
-            </div>
-        
-            <select id="model_select">
-                <option value="">Select Model</option>
-                {% for model in models %}
-                <option value="{{ model }}">{{ model }}</option>
-                {% endfor %}
-            </select>
-        
-            <select id="data_select">
-                <option value="">Select Data File</option>
-                {% for file in data_files %}
-                <option value="{{ file }}">{{ file }}</option>
-                {% endfor %}
-            </select>
-        
-            <button onclick="startProcessing()">Start Processing</button>
-        </div>
-
-        <img id="video_feed" style="width: 640px; height: 480px;">
-        <div class="prediction-display">
-            <h2>Current Prediction: <span id="prediction">Waiting...</span></h2>
-            <p>Predictions-per-second: <span id="fps">0</span></p>
-        </div>
+  <div class="card">
+    <div class="header">
+      <h1>Live Tactile Prediction Dashboard</h1>
     </div>
+    <div class="controls">
+      <div class="input-group">
+        <label><input type="radio" name="source" value="file" checked> Recorded File</label>
+        <label><input type="radio" name="source" value="live"> Live Camera</label>
+      </div>
+      <select id="model_select">
+        <option value="">Select Model</option>
+        {% for model in models %}
+          <option value="{{ model }}">{{ model }}</option>
+        {% endfor %}
+      </select>
+      <select id="data_select">
+        <option value="">Select Data File</option>
+        {% for file in data_files %}
+          <option value="{{ file }}">{{ file }}</option>
+        {% endfor %}
+      </select>
+      <button id="startBtn">Start Processing</button>
+      <button id="stopBtn">Stop Processing</button>
+    </div>
+    <div class="video-wrapper">
+      <img id="video_feed" alt="Video Feed">
+    </div>
+    <div class="prediction-display">
+      <h2>Current Prediction: <span id="prediction">Waiting...</span></h2>
+      <p>Predictions-per-second: <span id="fps">0</span></p>
+    </div>
+  </div>
 
-    <script>
-        var socket = io.connect("http://" + document.domain + ":" + location.port);
+  <script>
+    const socket = io();
 
-        socket.on("frame", function(data) {
-            document.getElementById("video_feed").src = "data:image/jpeg;base64," + btoa(String.fromCharCode.apply(null, new Uint8Array(data.image)));
-        });
-
-        socket.on("prediction", function(data) {
-            document.getElementById("prediction").textContent = data.label;
-            if (data.fps !== undefined) {
-                document.getElementById("fps").textContent = data.fps;
-            }
-        });
-
-        // Add this function to toggle data file selection visibility
-    document.querySelectorAll('input[name="source"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            const dataSelect = document.getElementById('data_select');
-            dataSelect.classList.toggle('hidden', this.value === 'live');
-        });
+    socket.on('frame', data => {
+      const blob = new Blob([new Uint8Array(data.image)], { type: 'image/jpeg' });
+      document.getElementById('video_feed').src = URL.createObjectURL(blob);
     });
 
-    function startProcessing() {
-        const model = document.getElementById('model_select').value;
-        const sourceType = document.querySelector('input[name="source"]:checked').value;
-        const data = sourceType === 'live' ? null : document.getElementById('data_select').value;
-        
-        if (!model || (sourceType === 'file' && !data)) {
-            alert('Please select required options');
-            return;
-        }
+    socket.on('prediction', data => {
+      document.getElementById('prediction').textContent = data.label;
+      if (data.fps !== undefined) {
+        document.getElementById('fps').textContent = data.fps;
+      }
+    });
 
-        fetch('/start_processing', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: model,
-                data: data,
-                source_type: sourceType
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'error') {
-                alert('Error: ' + data.message);
-            }
-        });
-    }
-</script>
+    // Toggle chọn data file khi live vs file
+    document.querySelectorAll('input[name="source"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById('data_select').classList.toggle('hidden', radio.value === 'live');
+      });
+    });
+
+    // Start
+    document.getElementById('startBtn').addEventListener('click', () => {
+      const model = document.getElementById('model_select').value;
+      const sourceType = document.querySelector('input[name="source"]:checked').value;
+      const dataFile = sourceType === 'file' ? document.getElementById('data_select').value : null;
+      if (!model || (sourceType === 'file' && !dataFile)) {
+        alert('Please select required options.');
+        return;
+      }
+      fetch('/start_processing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, data: dataFile, source_type: sourceType })
+      })
+      .then(res => res.json())
+      .then(resp => {
+        if (resp.status === 'error') alert(`Error: ${resp.message}`);
+      });
+    });
+
+    // Stop
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      fetch('/stop_processing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(res => res.json())
+      .then(resp => {
+        if (resp.status === 'success') {
+          window.location.reload();
+        } else {
+          alert(`Error stopping: ${resp.message}`);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

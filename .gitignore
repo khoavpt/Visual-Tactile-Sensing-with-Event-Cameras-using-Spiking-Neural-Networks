@@ -2,11 +2,6 @@
 **__pycache__/
 **.ruff_cache/
 
-data/raw_data/*
-data/seq_data_acc/*
-data/seq_data_tf/*
-data/seq_data_custom/*
-data/seq_data_acc2/*
-data/seq_data_acc3/*
+data
 
 outputs/*
